@@ -1,0 +1,291 @@
+:root{
+  --bg:#0b1220;
+  --card:#0f1a2e;
+  --muted:#9fb0d0;
+  --text:#e9f1ff;
+  --accent:#4ea1ff;
+  --ok:#24c16a;
+  --warn:#ffb020;
+  --bad:#ff5a6a;
+  --border: rgba(255,255,255,.10);
+  --glass: rgba(15,26,46,.75);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: radial-gradient(1200px 800px at 20% -10%, rgba(78,161,255,.25), transparent 55%),
+              radial-gradient(1000px 700px at 100% 0%, rgba(36,193,106,.18), transparent 50%),
+              var(--bg);
+  color:var(--text);
+}
+
+/* Layout */
+.container{max-width:980px;margin:0 auto;padding:18px}
+.header{
+  display:flex;gap:12px;align-items:center;justify-content:space-between;
+  padding:14px 16px;border:1px solid var(--border);border-radius:16px;background:var(--glass);
+  backdrop-filter: blur(8px);
+}
+.brand{display:flex;flex-direction:column;gap:3px}
+.brand h1{margin:0;font-size:16px;letter-spacing:.2px}
+.brand small{color:var(--muted)}
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.grid{
+  margin-top:14px;
+  display:grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap:14px;
+}
+@media (max-width: 920px){ .grid{grid-template-columns:1fr} }
+
+.card{
+  border:1px solid var(--border);
+  background:var(--glass);
+  border-radius:16px;
+  padding:14px;
+}
+
+.card h2{
+  margin:0 0 10px 0;
+  font-size:14px;
+  color: var(--muted);
+  font-weight:700;
+  letter-spacing:.2px;
+}
+
+/* Controls */
+.row{display:grid;grid-template-columns: 1fr 1fr;gap:10px}
+@media (max-width:560px){ .row{grid-template-columns:1fr} }
+
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-size:12px;color:var(--muted)}
+
+input, select, textarea{
+  width:100%;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.05);
+  color:var(--text);
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+input:focus, select:focus, textarea:focus{
+  border-color: rgba(78,161,255,.55);
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18);
+  background: rgba(255,255,255,.06);
+}
+
+textarea{min-height:110px;resize:vertical}
+
+/* Buttons */
+.btn{
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+  border-radius:12px;
+  padding:10px 12px;
+  cursor:pointer;
+  transition: transform .08s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.btn:hover{
+  background:rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.18);
+}
+.btn:active{transform: translateY(1px)}
+.btn.primary{
+  background:rgba(78,161,255,.18);
+  border-color:rgba(78,161,255,.35)
+}
+.btn.primary:hover{
+  background:rgba(78,161,255,.24);
+  border-color:rgba(78,161,255,.48);
+  box-shadow: 0 8px 18px rgba(78,161,255,.10);
+}
+
+/* KPI */
+.kpi{
+  display:flex;flex-direction:column;gap:6px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:14px;
+  background:rgba(255,255,255,.04);
+}
+.kpi .big{font-size:28px;font-weight:900;letter-spacing:.2px}
+.kpi .cap{color:var(--muted);font-size:12px}
+
+hr{border:0;border-top:1px solid var(--border);margin:12px 0}
+.badge{font-size:12px;color:var(--muted)}
+.mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+
+/* Hints */
+.hint { opacity: .9; font-size: 13px; line-height: 1.35; }
+
+/* Inverso table (más pro) */
+.invTableWrap{
+  overflow:auto;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.02);
+}
+.invTable{
+  width:100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+.invTable th, .invTable td{
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.invTable th{
+  text-align:left;
+  font-size: 12px;
+  opacity:.9;
+  position: sticky;
+  top: 0;
+  background: rgba(11,18,32,.92);
+  backdrop-filter: blur(8px);
+  z-index: 1;
+}
+.invTable input{ width: 160px; }
+
+/* Poster section */
+.posterHeader{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+}
+
+.poster{
+  margin-top: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.10);
+  overflow:hidden;
+  background:
+    radial-gradient(800px 500px at 10% 0%, rgba(78,161,255,.18), transparent 55%),
+    radial-gradient(700px 450px at 100% 0%, rgba(36,193,106,.14), transparent 55%),
+    rgba(255,255,255,.03);
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+
+.posterTop{
+  padding: 18px 18px 10px;
+}
+.posterBrand{
+  font-weight: 900;
+  letter-spacing: .14em;
+  opacity:.95;
+  font-size: 12px;
+}
+.posterTitle{
+  font-size: 30px;
+  font-weight: 900;
+  margin-top: 8px;
+  line-height: 1.05;
+}
+.posterSub{
+  margin-top: 8px;
+  opacity:.88;
+  font-size: 13px;
+}
+
+.posterBody{
+  padding: 0 18px 16px;
+}
+
+.posterTableWrap{
+  border-radius: 14px;
+  overflow:hidden;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(11,18,32,.35);
+}
+
+.posterTable{
+  width:100%;
+  border-collapse: collapse;
+}
+.posterTable th, .posterTable td{
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.posterTable th{
+  font-size: 11px;
+  opacity:.9;
+  text-transform: uppercase;
+  letter-spacing:.10em;
+}
+.posterTable td{
+  font-size: 14px;
+  font-weight: 700;
+}
+.posterTable tr:last-child td{border-bottom:0}
+
+.posterBottom{
+  padding: 12px 18px 16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:12px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.10);
+}
+.posterNote{
+  font-size: 12px;
+  opacity:.85;
+  max-width: 70%;
+}
+.posterFooter{
+  font-size: 12px;
+  opacity:.95;
+  font-weight: 800;
+  white-space: nowrap;
+}
+/* =========================
+   RESPONSIVE + EXPORT FIX
+   ========================= */
+
+/* Mejor adaptado a web grande */
+.container{max-width:1100px}
+@media (min-width: 1100px){
+  .grid{
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Mejor en móvil: padding y cards */
+@media (max-width: 560px){
+  .container{padding:12px}
+  .header{padding:12px}
+  .kpi .big{font-size:24px}
+  textarea{min-height:120px}
+}
+
+/* Poster siempre al 100% del ancho del contenedor */
+.poster{width:100%}
+
+/* EXPORT: ocultar TODO lo marcado con .noExport */
+.exporting .noExport{
+  display:none !important;
+}
+/* Durante export, ocultar elementos marcados */
+body.exporting .no-export { display: none !important; }
+
+/* Mejor responsive en móvil */
+@media (max-width: 560px){
+  .kpi .big{ font-size: 24px; }
+  .header{ align-items:flex-start; }
+  .actions{ width:100%; justify-content:flex-start; }
+  textarea{ min-height: 120px; }
+  .posterTitle{ font-size: 22px; }
+}
+
+
+/* Footer badge spacing */
+.footer{margin-top:10px;display:flex;justify-content:flex-end}
