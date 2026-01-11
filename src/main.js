@@ -9,6 +9,16 @@ import "./style.css";
 // ---------- helpers ----------
 const $ = (id) => document.getElementById(id);
 
+// Base para API (para que funcione en localhost sin CORS)
+const API_BASE = (() => {
+  const saved = localStorage.getItem("API_BASE");
+  if (saved) return saved.replace(/\/$/, "");
+  const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+  // usa tu Pages en producción como fallback cuando estás en local
+  return isLocal ? "https://cazeexchange.pages.dev" : "";
+})();
+
+
 function parseNum(x) {
   if (x === null || x === undefined) return 0;
   const s = String(x).trim().replaceAll(".", "").replace(",", ".");
@@ -159,7 +169,8 @@ mount.innerHTML = `
         <h2>Tasas (auto + manual)</h2>
         <p class="hint">
           Las tasas marcadas “auto” se llenan al presionar <b>Actualizar tasas</b>, pero <b>puedes editarlas</b> si falla la automática.
-          Binance P2P directo desde navegador suele dar CORS; por ahora <b>USDT/COP</b> y <b>USDT/VES</b> quedan manual.
+          Para <b>USDT/COP</b> y <b>USDT/VES</b> intentamos traer una <i>tasa del día</i> (preferiblemente Binance P2P vía server).
+          Si Binance falla o te bloquea, queda manual.
         </p>
 
         <div class="row">
@@ -535,10 +546,9 @@ function calcMain(opts = { paint: true }) {
   const methodLabel = useEur ? "EUR BCV" : "Binance manual";
 
   const copPerVes = vesUsed ? (cop / vesUsed) : null;
-const feeCop = feeUsdt * usdtCopBuy;
+  const feeCop = feeUsdt * usdtCopBuy;
 
-
-if (opts.paint !== false) {
+  if (opts.paint !== false) {
   setSummary({
     cop,
     baseUsdt,
@@ -549,14 +559,14 @@ if (opts.paint !== false) {
     methodLabel,
     copPerVes,
   });
+  }
+
+  return {
+    cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
+    baseUsdt, feeUsdt, netUsdt,
+    vesUsed, methodLabel, copPerVes
+  };
 }
-
-
-return {
-  cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
-  baseUsdt, feeUsdt, netUsdt,
-  vesUsed, methodLabel, copPerVes
-};
 
 
 
@@ -822,12 +832,45 @@ async function updateRates() {
   const status = $("status");
   status.textContent = "Actualizando…";
 
+  // Nota: para evitar CORS y tener una sola fuente, primero intentamos un endpoint propio
+  // (Cloudflare Pages Functions). Si no existe (por ejemplo en Vite dev), caemos a fetch directo.
+  const copNow = toNum($("inCop")?.value);
+  const ratesUrl = Number.isFinite(copNow) && copNow > 0
+    ? `/api/rates?cop=${encodeURIComponent(String(copNow))}`
+    : "/api/rates";
+  const serverRates = await safeJson(ratesUrl);
+  if (serverRates && serverRates.ok) {
+    // Valores base
+    if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesBCV", serverRates.usdVesBcv);
+    if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesParallel", serverRates.usdVesParallel);
+    if (Number.isFinite(serverRates.eurUsd)) setValue("eurUsd", serverRates.eurUsd);
+    // “Tasas del día” para P2P
+    // - Preferimos lo que venga directo de Binance (usdtCopBuy/usdtVesSell)
+    // - Si no viene, caemos a aproximaciones (usdCop y usdVesParallel)
+    const usdtCop = serverRates.usdtCopBuy ?? serverRates.usdCop ?? null;
+    const usdtVes = serverRates.usdtVesSell ?? serverRates.usdVesP2P ?? serverRates.usdVesParallel ?? null;
+    if (Number.isFinite(usdtCop)) setValue("usdtCopBuy", usdtCop);
+    if (Number.isFinite(usdtVes)) setValue("usdtVesSell", usdtVes);
+
+    // Marca de fuente para el resumen
+    state.lastRateMeta = {
+      ok: true,
+      sources: serverRates.sources || "API",
+      ts: serverRates.ts || new Date().toISOString(),
+    };
+
+    status.textContent = "Listo";
+    paint();
+    return;
+  }
+
   // DolarApi VE (USD oficial / paralelo)
   const usdOf = await safeJson("https://ve.dolarapi.com/v1/dolares/oficial");
   const usdPar = await safeJson("https://ve.dolarapi.com/v1/dolares/paralelo");
 
-  // EURUSD (sin key)
-  const fx = await safeJson("https://open.er-api.com/v6/latest/EUR");
+  // FX (gratis, sin key)
+  const fx = await safeJson("https://open.er-api.com/v6/latest/EUR"); // EURUSD
+  const usdFx = await safeJson("https://open.er-api.com/v6/latest/USD"); // USDCOP
 
   // BCV (EUR/VES) via tu Worker
   const bcv = await safeJson("https://remesas-proxy.agjeronimo14.workers.dev/bcv");
@@ -840,26 +883,39 @@ async function updateRates() {
   const eurVes = eurItem?.rate ?? eurItem?.value ?? eurItem?.price ?? null;
 
   const eurUsd = fx?.rates?.USD ?? null;
+  const usdCop = usdFx?.rates?.COP ?? null;
 
   if (ofVal) state.usdVesOficial = Number(ofVal);
   if (parVal) state.usdVesParalelo = Number(parVal);
   if (eurUsd) state.eurUsd = Number(eurUsd);
   if (eurVes) state.eurVesBCV = Number(eurVes);
+  if (usdCop) state.usdCop = Number(usdCop);
 
   state.updatedAt = new Date();
 
   // pinta en inputs (pero quedan editables)
   setInput("usdVesOf", state.usdVesOficial, 4);
+  const ok = [];
+
+  setInput("usdVesOfi", state.usdVesOficial, 4);
   setInput("usdVesPar", state.usdVesParalelo, 4);
   setInput("eurUsd", state.eurUsd, 6);
   setInput("eurVes", state.eurVesBCV, 4);
 
-  const ok = [];
+  // “tasas del día” aproximadas para campos manuales (USDT ~ 1 USD)
+  if (Number.isFinite(state.usdCop) && state.usdCop > 0) {
+    setInput("usdtCopBuy", state.usdCop, 2);
+    ok.push("USDT/COP (aprox)");
+  }
+  if (Number.isFinite(state.usdVesParalelo) && state.usdVesParalelo > 0) {
+    setInput("usdtVesSell", state.usdVesParalelo, 2);
+    ok.push("USDT/VES (aprox)");
+  }
   if (state.usdVesOficial) ok.push("USD/BCV");
   if (state.usdVesParalelo) ok.push("USD Paralelo");
   if (state.eurUsd) ok.push("EURUSD");
   if (state.eurVesBCV) ok.push("EUR/BCV");
-  ok.push("Binance: manual");
+  ok.push("P2P: auto (si responde)");
 
   status.textContent = `OK: ${ok.join(" · ")} · ${state.updatedAt.toLocaleString()}`;
 
@@ -937,8 +993,10 @@ function recalcAll() {
 }
 
 // ---------- events ----------
-$("btnUpdate").addEventListener("click", updateRates);
-$("btnExport").addEventListener("click", exportPoster);
+// En algunos entornos (o si alguien cambia el HTML) estos botones pueden no existir.
+// Evitamos que la app se caiga por un null.addEventListener().
+$("btnUpdate")?.addEventListener("click", updateRates);
+$("btnExport")?.addEventListener("click", exportPoster);
 
 // Modo pro (COP vs Objetivo)
 $("modeCop")?.addEventListener("click", () => setQuoteMode("cop"));
@@ -963,4 +1021,3 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 // auto al abrir
 applyQuoteModeUI();
 updateRates();
-}
