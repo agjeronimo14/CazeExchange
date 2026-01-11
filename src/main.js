@@ -18,6 +18,12 @@ const API_BASE = (() => {
   return isLocal ? "https://cazeexchange.pages.dev" : "";
 })();
 
+// Compat: si quedó alguna referencia vieja a toNum, no rompe.
+if (typeof window !== "undefined" && typeof window.toNum === "undefined") {
+  window.toNum = (v) => parseNum(v);
+}
+const toNum = (v) => parseNum(v);
+
 
 function parseNum(x) {
   if (x === null || x === undefined) return 0;
@@ -834,7 +840,7 @@ async function updateRates() {
 
   // Nota: para evitar CORS y tener una sola fuente, primero intentamos un endpoint propio
   // (Cloudflare Pages Functions). Si no existe (por ejemplo en Vite dev), caemos a fetch directo.
-  const copNow = toNum($("inCop")?.value);
+  const copNow =parseNum($("inCop")?.value);
   const ratesUrl = Number.isFinite(copNow) && copNow > 0
     ? `/api/rates?cop=${encodeURIComponent(String(copNow))}`
     : "/api/rates";
