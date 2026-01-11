@@ -537,7 +537,8 @@ function calcMain(opts = { paint: true }) {
   const copPerVes = vesUsed ? (cop / vesUsed) : null;
   const feeCop = feeUsdt * usdtCopBuy;
 
-  if (opts.paint !== false) setSummary({
+  if (opts.paint !== false) {
+  setSummary({
     cop,
     baseUsdt,
     feeUsdt,
@@ -547,14 +548,15 @@ function calcMain(opts = { paint: true }) {
     methodLabel,
     copPerVes,
   });
-  }
+}
+
 
   return {
     cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
     baseUsdt, feeUsdt, netUsdt,
     vesUsed, methodLabel, copPerVes
   };
-}
+
 
 function inverseCopForTargetVes(targetVes, rateVesPerUsdt, usdtCopBuy, feeType, feePct, feeFixed) {
   if (!targetVes || !rateVesPerUsdt || !usdtCopBuy) return null;
