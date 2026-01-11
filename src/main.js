@@ -535,9 +535,10 @@ function calcMain(opts = { paint: true }) {
   const methodLabel = useEur ? "EUR BCV" : "Binance manual";
 
   const copPerVes = vesUsed ? (cop / vesUsed) : null;
-  const feeCop = feeUsdt * usdtCopBuy;
+const feeCop = feeUsdt * usdtCopBuy;
 
-  if (opts.paint !== false) {
+
+if (opts.paint !== false) {
   setSummary({
     cop,
     baseUsdt,
@@ -551,11 +552,12 @@ function calcMain(opts = { paint: true }) {
 }
 
 
-  return {
-    cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
-    baseUsdt, feeUsdt, netUsdt,
-    vesUsed, methodLabel, copPerVes
-  };
+return {
+  cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
+  baseUsdt, feeUsdt, netUsdt,
+  vesUsed, methodLabel, copPerVes
+};
+
 
 
 function inverseCopForTargetVes(targetVes, rateVesPerUsdt, usdtCopBuy, feeType, feePct, feeFixed) {
@@ -961,3 +963,4 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 // auto al abrir
 applyQuoteModeUI();
 updateRates();
+}
