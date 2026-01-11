@@ -29,6 +29,64 @@ function parseNum(x) {
   return Number.isFinite(v) ? v : 0;
 }
 
+// ---------------- ajustes (%) para aproximar a Binance ----------------
+const ADJ_KEY = "CAZE_RATE_ADJ";
+const DEFAULT_ADJ = Object.freeze({
+  // Ejemplos iniciales (puedes cambiarlos desde la UI):
+  // -1.5% significa "bajar 1.5%"
+  bcvPct: -1.5,        // USD/VES Oficial (BCV)
+  parallelPct: -2.0,   // USD/VES Paralelo
+  usdtCopPct: 1.0,     // USDT/COP (comprar USDT en CO)
+  usdtVesPct: -2.5,    // USDT/VES (vender USDT en VE)
+});
+
+function loadAdj() {
+  try {
+    const raw = localStorage.getItem(ADJ_KEY);
+    if (!raw) return { ...DEFAULT_ADJ };
+    const obj = JSON.parse(raw);
+    return { ...DEFAULT_ADJ, ...(obj || {}) };
+  } catch {
+    return { ...DEFAULT_ADJ };
+  }
+}
+
+function saveAdj(adj) {
+  try {
+    localStorage.setItem(ADJ_KEY, JSON.stringify(adj));
+  } catch {}
+}
+
+function applyPct(value, pct) {
+  if (!Number.isFinite(value)) return value;
+  const p = Number.isFinite(pct) ? pct : 0;
+  return value * (1 + p / 100);
+}
+
+function fmtPct(p) {
+  // Para mostrar porcentajes en inputs con coma
+  return fmt(Number(p) || 0, 2);
+}
+
+function readAdjFromUI() {
+  // Acepta "1,5" o "1.5"
+  const bcvPct = parseNum($("adjBcv")?.value);
+  const parallelPct = parseNum($("adjPar")?.value);
+  const usdtCopPct = parseNum($("adjUsdtCop")?.value);
+  const usdtVesPct = parseNum($("adjUsdtVes")?.value);
+  return { bcvPct, parallelPct, usdtCopPct, usdtVesPct };
+}
+
+function hydrateAdjUI() {
+  const a = state.adj || { ...DEFAULT_ADJ };
+  if ($("adjBcv")) $("adjBcv").value = fmtPct(a.bcvPct);
+  if ($("adjPar")) $("adjPar").value = fmtPct(a.parallelPct);
+  if ($("adjUsdtCop")) $("adjUsdtCop").value = fmtPct(a.usdtCopPct);
+  if ($("adjUsdtVes")) $("adjUsdtVes").value = fmtPct(a.usdtVesPct);
+}
+
+
+
 function fmt(n, d = 2) {
   if (n === null || n === undefined || n === "" || !Number.isFinite(Number(n))) return "—";
   return new Intl.NumberFormat("es-ES", {
@@ -55,7 +113,20 @@ function setInput(id, value, d = null) {
     node.value = "";
     return;
   }
-  node.value = d === null ? String(Number(value)) : fmt(Number(value), d);
+  // Importante: usamos coma decimal (es-ES). Si metemos un "." como decimal,
+  // nuestro parseNum lo interpreta como separador de miles y rompe el cálculo.
+  // Por eso, por defecto formateamos con coma y limitamos decimales.
+  const n = Number(value);
+  const defaultDecimalsById = {
+    usdVesBCV: 2,
+    usdVesParallel: 2,
+    eurVes: 2,
+    eurUsd: 6,
+    usdtCopBuy: 2,
+    usdtVesSell: 2,
+  };
+  const autoD = d === null ? (defaultDecimalsById[id] ?? (Math.abs(n) < 10 ? 6 : 2)) : d;
+  node.value = fmt(n, autoD);
 }
 
 // ------------------------------------------------------------
@@ -120,6 +191,7 @@ async function getHtml2Canvas() {
 
 // ---------- state ----------
 const state = {
+  adj: loadAdj(),
   // tasas auto
   usdVesOficial: null,     // USD/VES (BCV oficial)
   usdVesParalelo: null,    // USD/VES paralelo
@@ -240,6 +312,36 @@ mount.innerHTML = `
             <label>USDT/VES (Vender USDT en VE) [manual por ahora]</label>
             <input id="usdtVesSell" inputmode="decimal" placeholder="Ej: 690" />
           </div>
+        </div>
+
+
+        <h2>Ajustes de tasa (editable)</h2>
+        <p class="hint">Estos % se aplican <b>encima</b> de las tasas automáticas para acercarlas a tu referencia. Se guardan en este navegador.</p>
+
+        <div class="row">
+          <div class="field">
+            <label>USD/VES (Oficial / BCV) ajuste %</label>
+            <input id="adjBcv" inputmode="decimal" placeholder="-1,50" />
+          </div>
+          <div class="field">
+            <label>USD/VES (Paralelo) ajuste %</label>
+            <input id="adjPar" inputmode="decimal" placeholder="-2,00" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>USDT/COP (Comprar USDT en CO) ajuste %</label>
+            <input id="adjUsdtCop" inputmode="decimal" placeholder="1,00" />
+          </div>
+          <div class="field">
+            <label>USDT/VES (Vender USDT en VE) ajuste %</label>
+            <input id="adjUsdtVes" inputmode="decimal" placeholder="-2,50" />
+          </div>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;">
+          <button id="btnAdjReset" class="btn secondary" type="button">Restablecer ajustes</button>
         </div>
 
         <hr/>
@@ -809,13 +911,11 @@ function renderPoster(activeQuote) {
 
   // meta (pero NO export)
   const gainLabel = feeType === "pct" ? `${fmt(feePct * 100, 0)}%` : `${fmt(feeFixed, 2)} USDT`;
-  setText("posterMeta", `Ganancia: ${gainLabel} · Método: ${methodLabel}`);
-
-  // Tasa grande en el flyer (SÍ se exporta)
+// Tasa grande en el flyer (SÍ se exporta)
   const rateSource = (activeQuote && activeQuote.copPerVes) ? activeQuote : null;
   if (rateSource && rateSource.copPerVes) {
     setText("posterRateValue", `COP ${fmt(rateSource.copPerVes, 6)}`);
-    setText("posterRateNote", `COP por 1 VES (${rateSource.methodLabel || methodLabel})`);
+    setText("posterRateNote", "COP por 1 VES");
   } else {
     setText("posterRateValue", "—");
     setText("posterRateNote", "Completa USDT/COP + tasas" );
@@ -878,17 +978,18 @@ async function updateRates() {
   const ratesUrl = `${API_BASE}${ratesPath}`;
   const serverRates = await safeJson(ratesUrl);
   if (serverRates && serverRates.ok) {
+    const adj = state.adj || { ...DEFAULT_ADJ };
     // Valores base
     // IDs del UI (definidos en createUI): usdVesOf (BCV) y usdVesPar (Paralelo)
-    if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesOf", serverRates.usdVesBcv);
-    if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesPar", serverRates.usdVesParallel);
+    if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesOf", applyPct(serverRates.usdVesBcv, adj.bcvPct), 2);
+    if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesPar", applyPct(serverRates.usdVesParallel, adj.parallelPct), 2);
     if (Number.isFinite(serverRates.eurVesBcv)) setValue("eurVes", serverRates.eurVesBcv);
-    if (Number.isFinite(serverRates.eurUsd)) setValue("eurUsd", serverRates.eurUsd);
+    if (Number.isFinite(serverRates.eurUsd)) setValue("eurUsd", serverRates.eurUsd, 6);
     // “Tasas del día” para P2P
     // - Preferimos lo que venga directo de Binance (usdtCopBuy/usdtVesSell)
     // - Si no viene, caemos a aproximaciones (usdCop y usdVesParallel)
-    const usdtCop = serverRates.usdtCopBuy ?? serverRates.usdCop ?? null;
-    const usdtVes = serverRates.usdtVesSell ?? serverRates.usdVesP2P ?? serverRates.usdVesParallel ?? null;
+    const usdtCop = applyPct((serverRates.usdtCopBuy ?? serverRates.usdCop ?? null), adj.usdtCopPct);
+    const usdtVes = applyPct((serverRates.usdtVesSell ?? serverRates.usdVesP2P ?? serverRates.usdVesParallel ?? null), adj.usdtVesPct);
     if (Number.isFinite(usdtCop)) setValue("usdtCopBuy", usdtCop);
     if (Number.isFinite(usdtVes)) setValue("usdtVesSell", usdtVes);
 
@@ -957,7 +1058,7 @@ async function updateRates() {
   if (state.eurVesBCV) ok.push("EUR/BCV");
   ok.push("P2P: auto (si responde)");
 
-  status.textContent = `OK: ${ok.join(" · ")} · ${state.updatedAt.toLocaleString()}`;
+  status.textContent = `OK: ${ok.join(" · ")} · ${state.updatedAt.toLocaleString()} · Ajustes: BCV ${fmt(adj.bcvPct,2)}% | Par ${fmt(adj.parallelPct,2)}% | USDT/COP ${fmt(adj.usdtCopPct,2)}% | USDT/VES ${fmt(adj.usdtVesPct,2)}%`;
 
   // recalcula todo
   readRatesFromInputs();
@@ -1038,6 +1139,29 @@ function recalcAll() {
 $("btnUpdate")?.addEventListener("click", updateRates);
 $("btnExport")?.addEventListener("click", exportPoster);
 
+// ajustes (%)
+["adjBcv","adjPar","adjUsdtCop","adjUsdtVes"].forEach((id) => {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener("input", () => {
+    state.adj = readAdjFromUI();
+    saveAdj(state.adj);
+  });
+  el.addEventListener("change", () => {
+    state.adj = readAdjFromUI();
+    saveAdj(state.adj);
+    updateRates();
+  });
+});
+
+$("btnAdjReset")?.addEventListener("click", () => {
+  state.adj = { ...DEFAULT_ADJ };
+  saveAdj(state.adj);
+  hydrateAdjUI();
+  updateRates();
+});
+
+
 // Modo pro (COP vs Objetivo)
 $("modeCop")?.addEventListener("click", () => setQuoteMode("cop"));
 $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
@@ -1045,7 +1169,7 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 [
   "inCop","feeType","feePct","feeFixed",
   "usdVesOf","usdVesPar","eurVes","eurUsd",
-  "usdtCopBuy","usdtVesSell",
+  "usdtCopBuy","usdtVesSell","adjBcv","adjPar","adjUsdtCop","adjUsdtVes",
   "invVes","invUsdBcv","invUsdPar","invUsdEur","invEur"
 ].forEach(id => {
   const n = $(id);
@@ -1060,4 +1184,5 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 
 // auto al abrir
 applyQuoteModeUI();
+hydrateAdjUI();
 updateRates();
