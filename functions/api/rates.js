@@ -71,6 +71,19 @@ async function binanceP2P({ fiat, tradeType, transAmount }) {
 }
 
 export async function onRequest(context) {
+  // --- CORS (para que funcione desde localhost durante desarrollo) ---
+  if (context.request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+
   const url = new URL(context.request.url);
   const copAmount = asNum(url.searchParams.get("cop"));
   const vesAmount = asNum(url.searchParams.get("ves"));
@@ -146,6 +159,7 @@ export async function onRequest(context) {
   const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "public, max-age=60",
+    "Access-Control-Allow-Origin": "*",
   };
   return new Response(JSON.stringify(out), { headers });
 }

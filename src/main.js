@@ -10,20 +10,17 @@ import "./style.css";
 const $ = (id) => document.getElementById(id);
 
 // Base para API (para que funcione en localhost sin CORS)
+// - En producción (Pages) queda "" y usamos /api/rates en el mismo dominio.
+// - En local (vite dev) usamos como fallback el dominio de Pages, a menos que el usuario lo cambie.
 const API_BASE = (() => {
-  const saved = localStorage.getItem("API_BASE");
-  if (saved) return saved.replace(/\/$/, "");
+  try {
+    const saved = localStorage.getItem("API_BASE");
+    if (saved) return saved.replace(/\/$/, "");
+  } catch {}
+
   const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-  // usa tu Pages en producción como fallback cuando estás en local
   return isLocal ? "https://cazeexchange.pages.dev" : "";
 })();
-
-// Compat: si quedó alguna referencia vieja a toNum, no rompe.
-if (typeof window !== "undefined" && typeof window.toNum === "undefined") {
-  window.toNum = (v) => parseNum(v);
-}
-const toNum = (v) => parseNum(v);
-
 
 function parseNum(x) {
   if (x === null || x === undefined) return 0;
@@ -60,6 +57,40 @@ function setInput(id, value, d = null) {
   }
   node.value = d === null ? String(Number(value)) : fmt(Number(value), d);
 }
+
+// ------------------------------------------------------------
+// Compat: commits anteriores usaban `toNum(...)` y `setValue(...)`.
+// En producción (bundle minificado) esto da `ReferenceError` si faltan.
+// Los dejamos aquí para que TODO siga funcionando aunque queden referencias.
+
+// Alias: `toNum(x)` => número limpio
+function toNum(v) {
+  return parseNum(v);
+}
+
+// Expone alias globales por si algún handler quedó fuera del scope del módulo.
+try {
+  if (typeof window !== "undefined") {
+    if (typeof window.toNum === "undefined") window.toNum = toNum;
+  }
+} catch {}
+
+// setValue(id, value, decimals?) -> setInput + dispara evento input
+function setValue(id, value, decimals = null) {
+  setInput(id, value, decimals);
+  const el = $(id);
+  if (!el) return;
+  try {
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  } catch {}
+}
+
+try {
+  if (typeof window !== "undefined") {
+    if (typeof window.setValue === "undefined") window.setValue = setValue;
+  }
+} catch {}
 
 async function safeJson(url) {
   try {
@@ -840,15 +871,18 @@ async function updateRates() {
 
   // Nota: para evitar CORS y tener una sola fuente, primero intentamos un endpoint propio
   // (Cloudflare Pages Functions). Si no existe (por ejemplo en Vite dev), caemos a fetch directo.
-  const copNow =parseNum($("inCop")?.value);
-  const ratesUrl = Number.isFinite(copNow) && copNow > 0
+  const copNow = parseNum($("inCop")?.value);
+  const ratesPath = Number.isFinite(copNow) && copNow > 0
     ? `/api/rates?cop=${encodeURIComponent(String(copNow))}`
     : "/api/rates";
+  const ratesUrl = `${API_BASE}${ratesPath}`;
   const serverRates = await safeJson(ratesUrl);
   if (serverRates && serverRates.ok) {
     // Valores base
-    if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesBCV", serverRates.usdVesBcv);
-    if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesParallel", serverRates.usdVesParallel);
+    // IDs del UI (definidos en createUI): usdVesOf (BCV) y usdVesPar (Paralelo)
+    if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesOf", serverRates.usdVesBcv);
+    if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesPar", serverRates.usdVesParallel);
+    if (Number.isFinite(serverRates.eurVesBcv)) setValue("eurVes", serverRates.eurVesBcv);
     if (Number.isFinite(serverRates.eurUsd)) setValue("eurUsd", serverRates.eurUsd);
     // “Tasas del día” para P2P
     // - Preferimos lo que venga directo de Binance (usdtCopBuy/usdtVesSell)
