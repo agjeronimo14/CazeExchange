@@ -79,6 +79,10 @@ const state = {
   eurUsd: null,            // USD por 1 EUR
   eurVesBCV: null,         // EUR/VES (BCV)
   updatedAt: null,
+
+  // UI (persistente)
+  quoteMode: (typeof localStorage !== "undefined" && localStorage.getItem("quoteMode")) || "goal",
+  invLast: (typeof localStorage !== "undefined" && localStorage.getItem("invLast")) || "invVes",
 };
 
 // ---------- mount ----------
@@ -112,9 +116,22 @@ mount.innerHTML = `
       <!-- LEFT -->
       <div class="card">
         <h2>Entradas (lo que te pregunta el cliente)</h2>
+
+        <div class="modeBar">
+          <div class="modeBarTop">
+            <div class="modeLabel">Modo de cotización</div>
+            <div class="segmented" role="tablist" aria-label="Modo de cotización">
+              <button id="modeCop" class="segBtn" type="button">Por COP</button>
+              <button id="modeGoal" class="segBtn" type="button">Por objetivo</button>
+            </div>
+          </div>
+          <div id="modeHint" class="hint" style="margin-top:8px">—</div>
+        </div>
+
+
         <div class="row">
           <div class="field">
-            <label>Monto que te entrega (COP)</label>
+            <label id="labInCop">Monto que te entrega (COP)</label>
             <input id="inCop" inputmode="decimal" placeholder="Ej: 200000" />
           </div>
 
@@ -194,7 +211,7 @@ mount.innerHTML = `
               </tr>
             </thead>
             <tbody>
-              <tr>
+              <tr id="row_invVes">
                 <td><b>Recibir VES</b></td>
                 <td><input id="invVes" inputmode="decimal" placeholder="Ej: 30000" /></td>
                 <td id="invVesEq">—</td>
@@ -202,7 +219,7 @@ mount.innerHTML = `
                 <td id="invVesUsd">—</td>
               </tr>
 
-              <tr>
+              <tr id="row_invUsdBcv">
                 <td><b>Recibir USD equiv (BCV)</b></td>
                 <td><input id="invUsdBcv" inputmode="decimal" placeholder="Ej: 50" /></td>
                 <td id="invUsdBcvEq">—</td>
@@ -210,7 +227,7 @@ mount.innerHTML = `
                 <td id="invUsdBcvUsd">—</td>
               </tr>
 
-              <tr>
+              <tr id="row_invUsdPar">
                 <td><b>Recibir USD equiv (Paralelo)</b></td>
                 <td><input id="invUsdPar" inputmode="decimal" placeholder="Ej: 50" /></td>
                 <td id="invUsdParEq">—</td>
@@ -218,7 +235,7 @@ mount.innerHTML = `
                 <td id="invUsdParUsd">—</td>
               </tr>
 
-              <tr>
+              <tr id="row_invUsdEur">
                 <td><b>Recibir USD equiv (EUR BCV)</b></td>
                 <td><input id="invUsdEur" inputmode="decimal" placeholder="Ej: 50" /></td>
                 <td id="invUsdEurEq">—</td>
@@ -226,7 +243,7 @@ mount.innerHTML = `
                 <td id="invUsdEurUsd">—</td>
               </tr>
 
-              <tr>
+              <tr id="row_invEur">
                 <td><b>Recibir EUR (BCV)</b></td>
                 <td><input id="invEur" inputmode="decimal" placeholder="Ej: 50" /></td>
                 <td id="invEurEq">—</td>
@@ -242,6 +259,8 @@ mount.innerHTML = `
       <!-- RIGHT -->
       <div class="card">
         <h2>Resumen para el cliente</h2>
+        <div id="quoteSourceBadge" class="badge mono" style="margin:-4px 0 10px 0">Fuente: —</div>
+
 
         <div class="kpi">
           <div class="cap">Tasa grande (COP por 1 VES)</div>
@@ -295,6 +314,12 @@ mount.innerHTML = `
             <div class="posterBrand">CAZEEXCHANGE</div>
             <div class="posterTitle">Cotiza en segundos. Envía a Venezuela.</div>
             <div class="posterSub no-export" id="posterMeta">—</div>
+
+            <div class="posterRate">
+              <div class="posterRateLabel">Tasa grande (COP por 1 VES)</div>
+              <div id="posterRateValue" class="posterRateValue">—</div>
+              <div id="posterRateNote" class="posterRateNote">—</div>
+            </div>
           </div>
 
           <div class="posterBody">
@@ -327,6 +352,84 @@ mount.innerHTML = `
 `;
 
 // ---------- logic ----------
+const INV_LABELS = {
+  invVes: "Recibir VES",
+  invUsdBcv: "Recibir USD (BCV)",
+  invUsdPar: "Recibir USD (Paralelo)",
+  invUsdEur: "Recibir USD (EUR BCV)",
+  invEur: "Recibir EUR (BCV)",
+};
+
+function setInvLast(id) {
+  state.invLast = id;
+  try { localStorage.setItem("invLast", id); } catch (_) {}
+  highlightInvRows();
+}
+
+function highlightInvRows() {
+  const rows = [
+    ["invVes","row_invVes"],
+    ["invUsdBcv","row_invUsdBcv"],
+    ["invUsdPar","row_invUsdPar"],
+    ["invUsdEur","row_invUsdEur"],
+    ["invEur","row_invEur"],
+  ];
+  rows.forEach(([key, rid]) => {
+    const tr = document.getElementById(rid);
+    if (!tr) return;
+    const on = state.quoteMode === "goal" && state.invLast === key;
+    tr.classList.toggle("rowActive", on);
+  });
+}
+
+function applyQuoteModeUI() {
+  const isGoal = state.quoteMode === "goal";
+
+  const bCop = $("modeCop");
+  const bGoal = $("modeGoal");
+  if (bCop && bGoal) {
+    bCop.classList.toggle("active", !isGoal);
+    bGoal.classList.toggle("active", isGoal);
+  }
+
+  const inCop = $("inCop");
+  if (inCop) {
+    inCop.readOnly = isGoal;
+    inCop.classList.toggle("readonly", isGoal);
+    inCop.placeholder = isGoal ? "Se calcula por objetivo" : "Ej: 200000";
+  }
+
+  const lab = $("labInCop");
+  if (lab) lab.textContent = isGoal ? "Monto que te entrega (COP) — calculado" : "Monto que te entrega (COP)";
+
+  const hint = $("modeHint");
+  if (hint) {
+    hint.textContent = isGoal
+      ? "Usa la tabla inversa: escribe cuánto quieres que llegue y el sistema calcula cuánto debe entregar el cliente."
+      : "Usa el monto en COP: escribe cuánto entrega el cliente y el sistema calcula cuánto recibe en Venezuela.";
+  }
+
+  const badge = $("quoteSourceBadge");
+  if (badge) {
+    badge.textContent = isGoal
+      ? `Fuente: Objetivo (${INV_LABELS[state.invLast] || "tabla inversa"})`
+      : "Fuente: COP (monto entregado)";
+  }
+
+  highlightInvRows();
+}
+
+function setQuoteMode(mode) {
+  state.quoteMode = mode === "cop" ? "cop" : "goal";
+  try { localStorage.setItem("quoteMode", state.quoteMode); } catch (_) {}
+  applyQuoteModeUI();
+  recalcAll();
+}
+
+function getActiveQuote(main, inv) {
+  return state.quoteMode === "goal" ? (inv?.cop ? inv : null) : (main?.cop ? main : null);
+}
+
 function readRatesFromInputs() {
   // permitimos manual override
   state.usdVesOficial = parseNum($("usdVesOf").value) || state.usdVesOficial;
@@ -342,7 +445,59 @@ function usdVesViaEur() {
   return null;
 }
 
-function calcMain() {
+function setSummaryBlank(note = "Completa datos") {
+  setText("kpiCopPerVes", "—");
+  setText("kpiNote", note);
+  setText("outEntrega", "—");
+  setText("outRecibe", "—");
+  setText("outBaseUsdt", "—");
+  setText("outFeeUsdt", "—");
+  setText("outNetUsdt", "—");
+  setText("outFeeCop", "—");
+  $("wa").value = "";
+}
+
+function setSummary({
+  cop,
+  baseUsdt,
+  feeUsdt,
+  netUsdt,
+  feeCop,
+  vesUsed,
+  methodLabel,
+  copPerVes,
+  waPrefix = "CazeExchange — Cotización remesa",
+} = {}) {
+  // UI
+  setText("outEntrega", Number.isFinite(cop) ? money("COP", cop, 0) : "—");
+  setText("outBaseUsdt", Number.isFinite(baseUsdt) ? money("USDT", baseUsdt, 2) : "—");
+  setText("outFeeUsdt", Number.isFinite(feeUsdt) ? money("USDT", feeUsdt, 2) : "—");
+  setText("outNetUsdt", Number.isFinite(netUsdt) ? money("USDT", netUsdt, 2) : "—");
+  setText("outFeeCop", Number.isFinite(feeCop) ? money("COP", feeCop, 0) : "—");
+
+  if (Number.isFinite(copPerVes) && copPerVes > 0) {
+    setText("kpiCopPerVes", `COP ${fmt(copPerVes, 6)}`);
+    setText("kpiNote", `COP por 1 VES (usando ${methodLabel || "—"})`);
+  } else {
+    setText("kpiCopPerVes", "—");
+    setText("kpiNote", "Faltan tasas para calcular la tasa grande");
+  }
+
+  const recibeTxt = Number.isFinite(vesUsed) && vesUsed > 0
+    ? `${money("VES", vesUsed, 2)} (${methodLabel || "—"})`
+    : "—";
+  setText("outRecibe", recibeTxt);
+
+  const lines = [
+    waPrefix,
+    `Entrega: ${Number.isFinite(cop) ? money("COP", cop, 0) : "—"}`,
+    `Recibe: ${Number.isFinite(vesUsed) ? money("VES", vesUsed, 2) : "—"} VES`,
+    `Tasa (COP/VES): ${Number.isFinite(copPerVes) ? fmt(copPerVes, 6) : "—"}`,
+  ];
+  $("wa").value = lines.join("\n");
+}
+
+function calcMain(opts = { paint: true }) {
   const cop = parseNum($("inCop").value);
   const usdtCopBuy = parseNum($("usdtCopBuy").value);
   const usdtVesSell = parseNum($("usdtVesSell").value);
@@ -352,15 +507,8 @@ function calcMain() {
   const feeFixed = parseNum($("feeFixed").value);
 
   if (!cop || !usdtCopBuy) {
-    setText("kpiCopPerVes", "—");
-    setText("kpiNote", "Completa COP + USDT/COP");
-    setText("outEntrega", "—");
-    setText("outRecibe", "—");
-    setText("outBaseUsdt", "—");
-    setText("outFeeUsdt", "—");
-    setText("outNetUsdt", "—");
-    setText("outFeeCop", "—");
-    $("wa").value = "";
+    // OJO: si el usuario usa la tabla inversa (objetivo), esto se sobreescribe luego.
+    if (opts.paint !== false) setSummaryBlank("Completa COP + USDT/COP o usa la tabla inversa");
     return {
       cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
       baseUsdt: null, feeUsdt: null, netUsdt: null,
@@ -389,35 +537,17 @@ function calcMain() {
   const copPerVes = vesUsed ? (cop / vesUsed) : null;
   const feeCop = feeUsdt * usdtCopBuy;
 
-  // UI
-  setText("outEntrega", money("COP", cop, 0));
-  setText("outBaseUsdt", money("USDT", baseUsdt, 2));
-  setText("outFeeUsdt", money("USDT", feeUsdt, 2));
-  setText("outNetUsdt", money("USDT", netUsdt, 2));
-  setText("outFeeCop", money("COP", feeCop, 0));
-
-  if (copPerVes) {
-    setText("kpiCopPerVes", `COP ${fmt(copPerVes, 6)}`);
-    setText("kpiNote", `COP por 1 VES (usando ${methodLabel})`);
-  } else {
-    setText("kpiCopPerVes", "—");
-    setText("kpiNote", "Falta EUR/VES+EURUSD o USDT/VES");
+  if (opts.paint !== false) setSummary({
+    cop,
+    baseUsdt,
+    feeUsdt,
+    netUsdt,
+    feeCop,
+    vesUsed,
+    methodLabel,
+    copPerVes,
+  });
   }
-
-  const recibeTxt = vesUsed
-    ? `${money("VES", vesUsed, 2)} (${methodLabel})`
-    : "—";
-
-  setText("outRecibe", recibeTxt);
-
-  // WhatsApp SOLO lo que pediste + CazeExchange
-  const lines = [
-    "CazeExchange — Cotización remesa",
-    `Entrega: ${money("COP", cop, 0)}`,
-    `Recibe: ${vesUsed ? money("VES", vesUsed, 2) : "—"} VES`,
-    `Tasa (COP/VES): ${copPerVes ? fmt(copPerVes, 6) : "—"}`,
-  ];
-  $("wa").value = lines.join("\n");
 
   return {
     cop, usdtCopBuy, usdtVesSell, feeType, feePct, feeFixed,
@@ -461,6 +591,21 @@ function calcInverse() {
   const eurUsd = parseNum($("eurUsd").value);        // USD por 1 EUR
   const usdViaEur = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
 
+  // Vamos a devolver un "primary" para pintar el Resumen cuando el usuario use la tabla inversa.
+  const primary = {
+    cop: null,
+    vesUsed: null,
+    methodLabel: null,
+    copPerVes: null,
+    baseUsdt: null,
+    feeUsdt: null,
+    netUsdt: null,
+    feeCop: null,
+  };
+
+  const candidates = {};
+
+
   // Si quieres “VES directo”, usamos preferencia EUR BCV si existe; si no, Binance (USDT/VES)
   const invVes = parseNum($("invVes").value);
   const rateForVes = usdViaEur || usdtVesSell || null;
@@ -468,6 +613,23 @@ function calcInverse() {
   setText("invVesEq", invVes ? `VES ${fmt(invVes, 2)}` : "—");
   setText("invVesCop", r0 ? money("COP", r0.cop, 0) : "—");
   setText("invVesUsd", r0 ? money("USD", r0.usd, 2) : "—");
+
+  if (invVes && r0) {
+    const baseUsdt = r0.cop / usdtCopBuy;
+    const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
+    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+    const methodLabel = usdViaEur ? "EUR BCV" : (usdtVesSell ? "Binance manual" : "—");
+    const copPerVes = r0.cop / invVes;
+    primary.cop = r0.cop;
+    primary.vesUsed = invVes;
+    primary.methodLabel = methodLabel;
+    primary.copPerVes = copPerVes;
+    primary.baseUsdt = baseUsdt;
+    primary.feeUsdt = feeUsdt;
+    primary.netUsdt = netUsdt;
+    primary.feeCop = feeUsdt * usdtCopBuy;
+    candidates.invVes = { cop: primary.cop, vesUsed: primary.vesUsed, methodLabel: primary.methodLabel, copPerVes: primary.copPerVes, baseUsdt: primary.baseUsdt, feeUsdt: primary.feeUsdt, netUsdt: primary.netUsdt, feeCop: primary.feeCop };
+  }
 
   // USD equiv (BCV)
   const invUsdBcv = parseNum($("invUsdBcv").value);
@@ -477,6 +639,23 @@ function calcInverse() {
   setText("invUsdBcvCop", r1 ? money("COP", r1.cop, 0) : "—");
   setText("invUsdBcvUsd", r1 ? money("USD", r1.usd, 2) : "—");
 
+  if (!primary.cop && invUsdBcv && targetVesBcv && r1) {
+    const baseUsdt = r1.cop / usdtCopBuy;
+    const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
+    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+    const methodLabel = usdViaEur ? "EUR BCV" : (usdtVesSell ? "Binance manual" : "—");
+    const copPerVes = r1.cop / targetVesBcv;
+    primary.cop = r1.cop;
+    primary.vesUsed = targetVesBcv;
+    primary.methodLabel = methodLabel;
+    primary.copPerVes = copPerVes;
+    primary.baseUsdt = baseUsdt;
+    primary.feeUsdt = feeUsdt;
+    primary.netUsdt = netUsdt;
+    primary.feeCop = feeUsdt * usdtCopBuy;
+    candidates.invUsdBcv = { cop: primary.cop, vesUsed: primary.vesUsed, methodLabel: primary.methodLabel, copPerVes: primary.copPerVes, baseUsdt: primary.baseUsdt, feeUsdt: primary.feeUsdt, netUsdt: primary.netUsdt, feeCop: primary.feeCop };
+  }
+
   // USD equiv (Paralelo)
   const invUsdPar = parseNum($("invUsdPar").value);
   const targetVesPar = (invUsdPar && usdPar) ? invUsdPar * usdPar : null;
@@ -484,6 +663,23 @@ function calcInverse() {
   setText("invUsdParEq", targetVesPar ? `VES ${fmt(targetVesPar, 2)}` : "—");
   setText("invUsdParCop", r2 ? money("COP", r2.cop, 0) : "—");
   setText("invUsdParUsd", r2 ? money("USD", r2.usd, 2) : "—");
+
+  if (!primary.cop && invUsdPar && targetVesPar && r2) {
+    const baseUsdt = r2.cop / usdtCopBuy;
+    const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
+    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+    const methodLabel = usdtVesSell ? "Binance manual" : (usdViaEur ? "EUR BCV" : "—");
+    const copPerVes = r2.cop / targetVesPar;
+    primary.cop = r2.cop;
+    primary.vesUsed = targetVesPar;
+    primary.methodLabel = methodLabel;
+    primary.copPerVes = copPerVes;
+    primary.baseUsdt = baseUsdt;
+    primary.feeUsdt = feeUsdt;
+    primary.netUsdt = netUsdt;
+    primary.feeCop = feeUsdt * usdtCopBuy;
+    candidates.invUsdPar = { cop: primary.cop, vesUsed: primary.vesUsed, methodLabel: primary.methodLabel, copPerVes: primary.copPerVes, baseUsdt: primary.baseUsdt, feeUsdt: primary.feeUsdt, netUsdt: primary.netUsdt, feeCop: primary.feeCop };
+  }
 
   // USD equiv (EUR BCV)
   const invUsdEur = parseNum($("invUsdEur").value);
@@ -493,6 +689,23 @@ function calcInverse() {
   setText("invUsdEurCop", r3 ? money("COP", r3.cop, 0) : "—");
   setText("invUsdEurUsd", r3 ? money("USD", r3.usd, 2) : "—");
 
+  if (!primary.cop && invUsdEur && targetVesEur && r3) {
+    const baseUsdt = r3.cop / usdtCopBuy;
+    const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
+    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+    const methodLabel = usdViaEur ? "EUR BCV" : "—";
+    const copPerVes = r3.cop / targetVesEur;
+    primary.cop = r3.cop;
+    primary.vesUsed = targetVesEur;
+    primary.methodLabel = methodLabel;
+    primary.copPerVes = copPerVes;
+    primary.baseUsdt = baseUsdt;
+    primary.feeUsdt = feeUsdt;
+    primary.netUsdt = netUsdt;
+    primary.feeCop = feeUsdt * usdtCopBuy;
+    candidates.invUsdEur = { cop: primary.cop, vesUsed: primary.vesUsed, methodLabel: primary.methodLabel, copPerVes: primary.copPerVes, baseUsdt: primary.baseUsdt, feeUsdt: primary.feeUsdt, netUsdt: primary.netUsdt, feeCop: primary.feeCop };
+  }
+
   // EUR (BCV)
   const invEur = parseNum($("invEur").value);
   const targetVesEurOnly = (invEur && eurVes) ? invEur * eurVes : null;
@@ -500,9 +713,34 @@ function calcInverse() {
   setText("invEurEq", targetVesEurOnly ? `VES ${fmt(targetVesEurOnly, 2)}` : "—");
   setText("invEurCop", r4 ? money("COP", r4.cop, 0) : "—");
   setText("invEurUsd", r4 ? money("USD", r4.usd, 2) : "—");
+
+  if (!primary.cop && invEur && targetVesEurOnly && r4) {
+    const baseUsdt = r4.cop / usdtCopBuy;
+    const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
+    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+    const methodLabel = usdViaEur ? "EUR BCV" : (usdtVesSell ? "Binance manual" : "—");
+    const copPerVes = r4.cop / targetVesEurOnly;
+    primary.cop = r4.cop;
+    primary.vesUsed = targetVesEurOnly;
+    primary.methodLabel = methodLabel;
+    primary.copPerVes = copPerVes;
+    primary.baseUsdt = baseUsdt;
+    primary.feeUsdt = feeUsdt;
+    primary.netUsdt = netUsdt;
+    primary.feeCop = feeUsdt * usdtCopBuy;
+    candidates.invEur = { cop: primary.cop, vesUsed: primary.vesUsed, methodLabel: primary.methodLabel, copPerVes: primary.copPerVes, baseUsdt: primary.baseUsdt, feeUsdt: primary.feeUsdt, netUsdt: primary.netUsdt, feeCop: primary.feeCop };
+  }
+
+  // En modo "Por objetivo", si el usuario tocó una fila específica, esa manda.
+  if (state.quoteMode === "goal") {
+    const last = state.invLast;
+    if (last && candidates[last] && candidates[last].cop) return candidates[last];
+  }
+
+  return primary;
 }
 
-function renderPoster(main) {
+function renderPoster(activeQuote) {
   const tbody = $("posterRows");
   if (!tbody) return;
 
@@ -521,6 +759,16 @@ function renderPoster(main) {
   // meta (pero NO export)
   const gainLabel = feeType === "pct" ? `${fmt(feePct * 100, 0)}%` : `${fmt(feeFixed, 2)} USDT`;
   setText("posterMeta", `Ganancia: ${gainLabel} · Método: ${methodLabel}`);
+
+  // Tasa grande en el flyer (SÍ se exporta)
+  const rateSource = (activeQuote && activeQuote.copPerVes) ? activeQuote : null;
+  if (rateSource && rateSource.copPerVes) {
+    setText("posterRateValue", `COP ${fmt(rateSource.copPerVes, 6)}`);
+    setText("posterRateNote", `COP por 1 VES (${rateSource.methodLabel || methodLabel})`);
+  } else {
+    setText("posterRateValue", "—");
+    setText("posterRateNote", "Completa USDT/COP + tasas" );
+  }
 
   tbody.innerHTML = amounts.map((cop) => {
     if (!usdtCopBuy) return `
@@ -613,21 +861,84 @@ async function updateRates() {
 
   // recalcula todo
   readRatesFromInputs();
-  const main = calcMain();
-  calcInverse();
-  renderPoster(main);
+  const main = calcMain({ paint: state.quoteMode === "cop" });
+  const primaryInv = calcInverse();
+  const active = getActiveQuote(main, primaryInv);
+
+  // En modo objetivo: copiamos el COP calculado a la casilla principal (solo lectura)
+  if (state.quoteMode === "goal") {
+    setInput("inCop", active?.cop ?? null, 0);
+    if (active) {
+      setSummary({
+        cop: active.cop,
+        baseUsdt: active.baseUsdt,
+        feeUsdt: active.feeUsdt,
+        netUsdt: active.netUsdt,
+        feeCop: active.feeCop,
+        vesUsed: active.vesUsed,
+        methodLabel: active.methodLabel,
+        copPerVes: active.copPerVes,
+        waPrefix: "CazeExchange — Cotización remesa (objetivo)",
+      });
+    } else {
+      setSummaryBlank("Escribe un objetivo en la tabla inversa");
+    }
+  }
+
+  const badge = $("quoteSourceBadge");
+  if (badge) {
+    badge.textContent = state.quoteMode === "goal"
+      ? `Fuente: Objetivo (${INV_LABELS[state.invLast] || "tabla inversa"})`
+      : "Fuente: COP (monto entregado)";
+  }
+
+  renderPoster(active);
 }
 
 function recalcAll() {
   readRatesFromInputs();
-  const main = calcMain();
-  calcInverse();
-  renderPoster(main);
+
+  const main = calcMain({ paint: state.quoteMode === "cop" });
+  const primaryInv = calcInverse();
+  const active = getActiveQuote(main, primaryInv);
+
+  const badge = $("quoteSourceBadge");
+  if (badge) {
+    badge.textContent = state.quoteMode === "goal"
+      ? `Fuente: Objetivo (${INV_LABELS[state.invLast] || "tabla inversa"})`
+      : "Fuente: COP (monto entregado)";
+  }
+
+  if (state.quoteMode === "goal") {
+    setInput("inCop", active?.cop ?? null, 0);
+
+    if (active) {
+      setSummary({
+        cop: active.cop,
+        baseUsdt: active.baseUsdt,
+        feeUsdt: active.feeUsdt,
+        netUsdt: active.netUsdt,
+        feeCop: active.feeCop,
+        vesUsed: active.vesUsed,
+        methodLabel: active.methodLabel,
+        copPerVes: active.copPerVes,
+        waPrefix: "CazeExchange — Cotización remesa (objetivo)",
+      });
+    } else {
+      setSummaryBlank("Escribe un objetivo en la tabla inversa");
+    }
+  }
+
+  renderPoster(active);
 }
 
 // ---------- events ----------
 $("btnUpdate").addEventListener("click", updateRates);
 $("btnExport").addEventListener("click", exportPoster);
+
+// Modo pro (COP vs Objetivo)
+$("modeCop")?.addEventListener("click", () => setQuoteMode("cop"));
+$("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 
 [
   "inCop","feeType","feePct","feeFixed",
@@ -637,9 +948,14 @@ $("btnExport").addEventListener("click", exportPoster);
 ].forEach(id => {
   const n = $(id);
   if (!n) return;
+  if (id.startsWith("inv")) {
+    n.addEventListener("focus", () => setInvLast(id));
+    n.addEventListener("input", () => setInvLast(id));
+  }
   n.addEventListener("input", recalcAll);
   n.addEventListener("change", recalcAll);
 });
 
 // auto al abrir
+applyQuoteModeUI();
 updateRates();
