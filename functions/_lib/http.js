@@ -1,10 +1,13 @@
-export function json(data, init = {}) {
-  const headers = new Headers(init.headers || {});
-  if (!headers.has("content-type")) headers.set("content-type", "application/json; charset=utf-8");
-  // Default: no-store for auth/admin responses. Rates endpoint can override.
-  if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
-  return new Response(JSON.stringify(data), { ...init, headers });
+export function json(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...extraHeaders,
+    },
+  });
 }
+
 
 export function text(data, init = {}) {
   const headers = new Headers(init.headers || {});
