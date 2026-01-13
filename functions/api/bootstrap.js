@@ -16,7 +16,7 @@ function b64(bytes) {
   return Buffer.from(bytes).toString("base64");
 }
 
-async function hashPassword(password, iterations = 120000) {
+async function hashPassword(password, iterations = 100000) {
   const salt = randomBytes(16);
   const key = await crypto.subtle.importKey(
     "raw",
