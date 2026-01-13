@@ -1,18 +1,26 @@
 const te = new TextEncoder();
 
-function b64(bytes) {
-  return Buffer.from(bytes).toString("base64");
-}
-function b64ToBytes(s) {
-  return new Uint8Array(Buffer.from(s, "base64"));
-}
 function randomBytes(n) {
   const a = new Uint8Array(n);
   crypto.getRandomValues(a);
   return a;
 }
 
-export async function hashPassword(password, iterations = 120000) {
+// Base64 (no-url) para guardar en DB
+function b64(bytes) {
+  return Buffer.from(bytes).toString("base64");
+}
+function b64ToBytes(s) {
+  return new Uint8Array(Buffer.from(s, "base64"));
+}
+
+// Token para sesiones / reset passwords (base64url)
+export function randomToken(size = 32) {
+  return Buffer.from(randomBytes(size)).toString("base64url");
+}
+
+// === Compat: pbkdf2Hash / pbkdf2Verify (lo que esperan tus imports) ===
+export async function pbkdf2Hash(password, iterations = 120000) {
   const salt = randomBytes(16);
 
   const key = await crypto.subtle.importKey(
@@ -35,12 +43,14 @@ export async function hashPassword(password, iterations = 120000) {
   return `pbkdf2$sha256$${iterations}$${b64(salt)}$${b64(hash)}`;
 }
 
-export async function verifyPassword(password, stored) {
+export async function pbkdf2Verify(password, stored) {
   try {
-    const [algo, hashName, iterStr, saltB64, hashB64] = stored.split("$");
+    const [algo, hashName, iterStr, saltB64, hashB64] = String(stored).split("$");
     if (algo !== "pbkdf2" || hashName !== "sha256") return false;
 
     const iterations = Number(iterStr);
+    if (!Number.isFinite(iterations) || iterations <= 0) return false;
+
     const salt = b64ToBytes(saltB64);
     const expected = b64ToBytes(hashB64);
 
@@ -69,8 +79,11 @@ export async function verifyPassword(password, stored) {
   }
 }
 
+// === Aliases opcionales (por si en otros lados usas hashPassword/verifyPassword) ===
+export const hashPassword = pbkdf2Hash;
+export const verifyPassword = pbkdf2Verify;
+
+// Para sesiones si alguna parte lo usa con otro nombre
 export function generateSessionId() {
-  // token base64url
-  const bytes = randomBytes(32);
-  return Buffer.from(bytes).toString("base64url");
+  return randomToken(32);
 }
