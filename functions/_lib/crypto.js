@@ -20,7 +20,7 @@ export function randomToken(size = 32) {
 }
 
 // === Compat: pbkdf2Hash / pbkdf2Verify (lo que esperan tus imports) ===
-export async function pbkdf2Hash(password, iterations = 120000) {
+export async function pbkdf2Hash(password, iterations = 100000) {
   const salt = randomBytes(16);
 
   const key = await crypto.subtle.importKey(
