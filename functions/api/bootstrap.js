@@ -12,12 +12,17 @@ function randomBytes(n) {
   crypto.getRandomValues(a);
   return a;
 }
-function b64(bytes) {
-  return Buffer.from(bytes).toString("base64");
+function bytesToBase64(bytes) {
+  // bytes: Uint8Array
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s); // base64 estándar
 }
+
 
 async function hashPassword(password, iterations = 100000) {
   const salt = randomBytes(16);
+
   const key = await crypto.subtle.importKey(
     "raw",
     te.encode(password),
@@ -25,13 +30,16 @@ async function hashPassword(password, iterations = 100000) {
     false,
     ["deriveBits"]
   );
+
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
     key,
     256
   );
+
   const hash = new Uint8Array(bits);
-  return `pbkdf2$sha256$${iterations}$${b64(salt)}$${b64(hash)}`;
+
+  return `pbkdf2$sha256$${iterations}$${bytesToBase64(salt)}$${bytesToBase64(hash)}`;
 }
 
 function getProvidedToken(request) {
