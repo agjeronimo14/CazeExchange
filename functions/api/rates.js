@@ -155,7 +155,14 @@ export async function onRequest(context) {
     out.sources.push("USDT/VES ≈ USD/VES paralelo (aprox)");
   }
 
-  // Cache corto para evitar rate limit (60s)
+  
+  // Estado simple para UI
+  const required = ["usdVesBcv", "usdVesParallel", "usdtCopBuy", "usdtVesSell"];
+  const missing = required.filter((k) => !Number.isFinite(out[k]));
+  out.status = missing.length === 0 && out.warnings.length === 0 ? "ok" : "fallback";
+  out.missing = missing;
+
+// Cache corto para evitar rate limit (60s)
   const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "public, max-age=60",

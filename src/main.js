@@ -22,6 +22,208 @@ const API_BASE = (() => {
   return isLocal ? "https://cazeexchange.pages.dev" : "";
 })();
 
+// Fetch helper (same-origin by default)
+async function apiFetch(path, opts = {}) {
+  const url = `${path.startsWith("http") ? "" : ""}${path}`;
+  const res = await fetch(url, {
+    ...opts,
+    headers: { "content-type": "application/json", ...(opts.headers || {}) },
+    credentials: "include",
+  });
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("application/json") ? await res.json().catch(() => null) : await res.text();
+  if (!res.ok) {
+    const msg = (data && data.error) ? data.error : `HTTP ${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+function setUserBadge() {
+  const el = $("userBadge");
+  if (!el) return;
+  if (!state.user) {
+    el.textContent = "Modo: demo (sin login)";
+    applyRoleGates();
+    return;
+  }
+  const exp = state.user.expires_at ? ` · expira ${state.user.expires_at}` : "";
+  el.textContent = `${state.user.email} · ${state.user.role}/${state.user.plan}${exp}`;
+  applyRoleGates();
+}
+
+function isLimitedUser() {
+  if (state.demo || !state.user) return true;
+  return ["trial", "viewer"].includes(state.user.role);
+}
+
+function applyRoleGates() {
+  const limited = isLimitedUser();
+  if ($("btnExport")) $("btnExport").disabled = limited;
+  const msg = limited ? "Funciones limitadas (demo/trial). Para Pro, pide activación por WhatsApp." : "";
+  const el = $("loginMsg"); // reuse? no
+  // show in status badge title
+  if ($("status")) $("status").title = msg;
+}
+
+
+function openAuthModal(msg = "") {
+  const m = $("authModal");
+  if (!m) return;
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+  if ($("loginMsg")) $("loginMsg").textContent = msg;
+}
+
+function closeAuthModal() {
+  const m = $("authModal");
+  if (!m) return;
+  m.classList.add("hidden");
+  m.setAttribute("aria-hidden", "true");
+  if ($("loginMsg")) $("loginMsg").textContent = "";
+}
+
+// Tabs
+function setActiveTab(tab) {
+  document.querySelectorAll(".tabBtn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === tab);
+  });
+
+  const panes = document.querySelectorAll("[data-tabs]");
+  panes.forEach((p) => {
+    const list = String(p.dataset.tabs || "").split(/\s+/).filter(Boolean);
+    p.style.display = list.includes(tab) ? "" : "none";
+  });
+
+  // Columns: hide if empty
+  ["colLeft", "colRight"].forEach((id) => {
+    const col = $(id);
+    if (!col) return;
+    const visible = [...col.querySelectorAll("[data-tabs]")].some((p) => p.style.display !== "none");
+    col.style.display = visible ? "" : "none";
+  });
+}
+
+
+
+
+// -------- Phase 2 UI/UX: split panes into separate cards + mobile bottom tabs --------
+function applyPhase2Layout() {
+  // idempotente
+  if (document.getElementById('bottomTabs')) return;
+
+  // 1) Mobile bottom tabs
+  const container = document.querySelector('.container');
+  if (container) {
+    const nav = document.createElement('nav');
+    nav.id = 'bottomTabs';
+    nav.className = 'tabsBottom no-export';
+    nav.setAttribute('aria-label', 'Navegación móvil');
+    nav.innerHTML = `
+      <button class="tabBtn" data-tab="quote" type="button">Cotizar</button>
+      <button class="tabBtn" data-tab="rates" type="button">Tasas</button>
+      <button class="tabBtn" data-tab="summary" type="button">Resumen</button>
+      <button class="tabBtn" data-tab="whatsapp" type="button">WhatsApp</button>
+      <button class="tabBtn" data-tab="admin" id="tabAdminMobile" type="button" style="display:none">Admin</button>
+    `;
+    container.appendChild(nav);
+  }
+
+  // 2) Split each column (which used to be ONE big .card) into a stack of cards
+  function splitColumn(id) {
+    const root = document.getElementById(id);
+    if (!root) return;
+
+    // only split if current element is a single card wrapper
+    if (!root.classList.contains('card')) return;
+
+    const col = document.createElement('div');
+    col.id = id;
+    col.className = 'colStack';
+
+    const panes = Array.from(root.querySelectorAll('.pane'));
+    for (const pane of panes) {
+      const tabs = pane.dataset.tabs || '';
+      const wrapper = document.createElement('section');
+      wrapper.className = 'card';
+      wrapper.dataset.tabs = tabs;
+
+      // carry classes like adminOnly
+      if (pane.classList.contains('adminOnly')) wrapper.classList.add('adminOnly');
+
+      // move children (avoid nested [data-tabs])
+      const children = Array.from(pane.childNodes);
+      for (const ch of children) wrapper.appendChild(ch);
+      pane.remove();
+
+      col.appendChild(wrapper);
+    }
+
+    root.replaceWith(col);
+  }
+
+  splitColumn('colLeft');
+  splitColumn('colRight');
+
+  // 3) Convert certain .row blocks (form-like) into grid for cleaner layout
+  document.querySelectorAll('.row').forEach((row) => {
+    const fields = row.querySelectorAll('.field');
+    if (fields.length >= 2) row.classList.add('formRow');
+  });
+
+  // 4) Add WhatsApp quick actions if not present
+  const wa = document.getElementById('wa');
+  if (wa && !document.getElementById('btnCopyWA')) {
+    const bar = document.createElement('div');
+    bar.className = 'waActions no-export';
+    bar.innerHTML = `
+      <button id="btnCopyWA" class="btn" type="button">Copiar</button>
+      <button id="btnOpenWA" class="btn primary" type="button">Abrir WhatsApp</button>
+      <span id="waMsg" class="hint" style="margin-left:auto"></span>
+    `;
+    wa.insertAdjacentElement('afterend', bar);
+  }
+}
+
+function wireTabButtons() {
+  document.querySelectorAll('.tabBtn').forEach((btn) => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+  });
+}
+
+function wireWhatsappActions() {
+  const btnCopy = document.getElementById('btnCopyWA');
+  const btnOpen = document.getElementById('btnOpenWA');
+  const wa = document.getElementById('wa');
+  const msg = document.getElementById('waMsg');
+
+  if (btnCopy && wa) {
+    btnCopy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(wa.value || '');
+        if (msg) msg.textContent = 'Copiado ✅';
+      } catch {
+        // fallback
+        wa.focus();
+        wa.select();
+        document.execCommand('copy');
+        if (msg) msg.textContent = 'Copiado ✅';
+      }
+      setTimeout(() => { if (msg) msg.textContent = ''; }, 1200);
+    });
+  }
+
+  if (btnOpen && wa) {
+    btnOpen.addEventListener('click', () => {
+      const text = encodeURIComponent(wa.value || '');
+      const url = `https://wa.me/?text=${text}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  }
+}
 function parseNum(x) {
   if (x === null || x === undefined) return 0;
   const s = String(x).trim().replaceAll(".", "").replace(",", ".");
@@ -55,7 +257,31 @@ function saveAdj(adj) {
   try {
     localStorage.setItem(ADJ_KEY, JSON.stringify(adj));
   } catch {}
+  scheduleSaveSettings(adj);
 }
+
+let _saveSettingsTimer = null;
+function scheduleSaveSettings(adj) {
+  if (state.demo || !state.user) return;
+  if (_saveSettingsTimer) clearTimeout(_saveSettingsTimer);
+  _saveSettingsTimer = setTimeout(async () => {
+    try {
+      await apiFetch("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          adj_bcv: adj.bcvPct,
+          adj_parallel: adj.parallelPct,
+          adj_usdt_cop: adj.usdtCopPct,
+          adj_usdt_ves: adj.usdtVesPct,
+        }),
+      });
+    } catch (e) {
+      console.warn("No se pudo guardar settings en server:", e?.message || e);
+      // seguimos en localStorage para no romper UX
+    }
+  }, 500);
+}
+
 
 function applyPct(value, pct) {
   if (!Number.isFinite(value)) return value;
@@ -84,6 +310,20 @@ function hydrateAdjUI() {
   if ($("adjUsdtCop")) $("adjUsdtCop").value = fmtPct(a.usdtCopPct);
   if ($("adjUsdtVes")) $("adjUsdtVes").value = fmtPct(a.usdtVesPct);
 }
+
+function applyServerSettingsToState(settings) {
+  if (!settings) return;
+  // map DB fields -> local adj fields
+  state.adj = {
+    ...state.adj,
+    bcvPct: Number(settings.adj_bcv ?? 0),
+    parallelPct: Number(settings.adj_parallel ?? 0),
+    usdtCopPct: Number(settings.adj_usdt_cop ?? 0),
+    usdtVesPct: Number(settings.adj_usdt_ves ?? 0),
+  };
+  hydrateAdjUI();
+}
+
 
 
 
@@ -191,6 +431,8 @@ async function getHtml2Canvas() {
 
 // ---------- state ----------
 const state = {
+  user: null,
+  demo: true,
   adj: loadAdj(),
   // tasas auto
   usdVesOficial: null,     // USD/VES (BCV oficial)
@@ -221,20 +463,31 @@ mount.innerHTML = `
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
           <h1 style="margin:0">Remesas (COP → USDT → VES)</h1>
           <span class="badge mono">CAZEEXCHANGE</span>
+          <span id="ratesBadge" class="badge mono">Tasas: —</span>
         </div>
-        <small class="badge">Modo: sin usuarios · pensado para móvil · tasas automáticas (con edición manual)</small>
+        <small id="userBadge" class="badge">Modo: demo (sin login)</small>
       </div>
       <div class="actions">
         <button id="btnUpdate" class="btn primary">Actualizar tasas</button>
         <button id="btnExport" class="btn">Exportar imagen</button>
+        <button id="btnLogout" class="btn" style="display:none">Salir</button>
         <span id="status" class="badge mono">Listo</span>
       </div>
     </div>
 
+    <div class="tabsTop" role="tablist" aria-label="Navegación">
+      <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">Cotizar</button>
+      <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas</button>
+      <button class="tabBtn" data-tab="summary" id="tabSummary" type="button">Resumen</button>
+      <button class="tabBtn" data-tab="whatsapp" id="tabWhatsApp" type="button">WhatsApp</button>
+      <button class="tabBtn" data-tab="admin" id="tabAdmin" type="button" style="display:none">Admin</button>
+    </div>
+
     <div class="grid">
       <!-- LEFT -->
-      <div class="card">
-        <h2>Entradas (lo que te pregunta el cliente)</h2>
+      <div id="colLeft" class="card">
+        <section class="pane" data-tabs="quote">
+          <h2>Entradas (lo que te pregunta el cliente)</h2>
 
         <div class="modeBar">
           <div class="modeBarTop">
@@ -273,9 +526,11 @@ mount.innerHTML = `
           </div>
         </div>
 
-        <hr/>
+        
+        </section>
 
-        <h2>Tasas (auto + manual)</h2>
+        <section class="pane" data-tabs="rates">
+          <h2>Tasas (auto + manual)</h2>
         <p class="hint">
           Las tasas marcadas “auto” se llenan al presionar <b>Actualizar tasas</b>, pero <b>puedes editarlas</b> si falla la automática.
           Para <b>USDT/COP</b> y <b>USDT/VES</b> intentamos traer una <i>tasa del día</i> (preferiblemente Binance P2P vía server).
@@ -315,7 +570,11 @@ mount.innerHTML = `
         </div>
 
 
-        <h2>Ajustes de tasa (editable)</h2>
+        
+        </section>
+
+        <section class="pane" data-tabs="rates">
+          <h2>Ajustes de tasa (editable)</h2>
         <p class="hint">Estos % se aplican <b>encima</b> de las tasas automáticas para acercarlas a tu referencia. Se guardan en este navegador.</p>
 
         <div class="row">
@@ -346,7 +605,11 @@ mount.innerHTML = `
 
         <hr/>
 
-        <h2>Cálculo inverso (opcional): “quiero que me llegue…”</h2>
+        
+        </section>
+
+        <section class="pane" data-tabs="quote">
+          <h2>Cálculo inverso (opcional): “quiero que me llegue…”</h2>
         <p class="hint">Escribe el objetivo y te calcula cuánto debe entregar el cliente (COP) considerando tu ganancia.</p>
 
         <div class="invTableWrap">
@@ -404,11 +667,85 @@ mount.innerHTML = `
           </table>
         </div>
 
+      
+        </section>
+
+        <section class="pane adminOnly" data-tabs="admin">
+          <h2>Administración (SaaS)</h2>
+          <p class="hint">Crea usuarios manualmente para cobrar por WhatsApp. También puedes resetear claves y activar/desactivar.</p>
+
+          <div class="row">
+            <div class="field">
+              <label>Email</label>
+              <input id="adminEmail" inputmode="email" placeholder="cliente@email.com" />
+            </div>
+            <div class="field">
+              <label>Rol</label>
+              <select id="adminRole">
+                <option value="trial">trial</option>
+                <option value="viewer">viewer</option>
+                <option value="pro">pro</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Plan</label>
+              <select id="adminPlan">
+                <option value="trial">trial</option>
+                <option value="pro">pro</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Expira (ISO o vacío)</label>
+              <input id="adminExpires" placeholder="2026-02-01T00:00:00Z" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Contraseña (vacío = generar)</label>
+              <input id="adminPassword" placeholder="mín 6" />
+            </div>
+            <div class="field">
+              <label>Activo</label>
+              <select id="adminActive">
+                <option value="1">Sí</option>
+                <option value="0">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="btnAdminCreate" class="btn primary" type="button">Crear usuario</button>
+            <button id="btnAdminReload" class="btn" type="button">Refrescar lista</button>
+          </div>
+
+          <div id="adminResult" class="hint" style="margin-top:10px"></div>
+
+          <hr/>
+
+          <h2 style="margin:0">Usuarios</h2>
+          <div class="hint" style="margin:6px 0 10px">Tip: para resetear, usa el botón en la fila.</div>
+          <div style="overflow:auto">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>Email</th><th>Role</th><th>Plan</th><th>Expira</th><th>Activo</th><th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersTbody"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <!-- RIGHT -->
-      <div class="card">
-        <h2>Resumen para el cliente</h2>
+      <div id="colRight" class="card">
+        <section class="pane" data-tabs="summary">
+          <h2>Resumen para el cliente</h2>
         <div id="quoteSourceBadge" class="badge mono" style="margin:-4px 0 10px 0">Fuente: —</div>
 
 
@@ -447,12 +784,20 @@ mount.innerHTML = `
 
         <hr/>
 
-        <h2>Mensaje WhatsApp (copiar/pegar)</h2>
+        
+        </section>
+
+        <section class="pane" data-tabs="whatsapp">
+          <h2>Mensaje WhatsApp (copiar/pegar)</h2>
         <textarea id="wa" readonly></textarea>
 
         <hr/>
 
-        <div class="posterHeader">
+        
+        </section>
+
+        <section class="pane" data-tabs="summary">
+          <div class="posterHeader">
           <div>
             <h2 style="margin:0">Tabla para redes (exportable)</h2>
             <div class="hint">Genera una imagen tipo “flyer” con montos ejemplo (COP → VES).</div>
@@ -495,11 +840,115 @@ mount.innerHTML = `
             </div>
           </div>
         </div>
-
+        </section>
       </div>
     </div>
   </div>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal hidden" aria-hidden="true">
+    <div class="modalCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <h2 style="margin:0">Iniciar sesión</h2>
+        <span class="badge mono">CazeExchange</span>
+      </div>
+      <p class="hint">Si no tienes usuario aún, puedes usar el modo demo. Para Pro, te activan por WhatsApp.</p>
+
+      <div class="field">
+        <label>Email</label>
+        <input id="loginEmail" inputmode="email" placeholder="tu@email.com" />
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input id="loginPassword" type="password" placeholder="••••••••" />
+      </div>
+
+      <div class="row">
+        <button id="btnLogin" class="btn primary" type="button">Entrar</button>
+        <button id="btnDemo" class="btn" type="button">Usar demo</button>
+      </div>
+
+      <div id="loginMsg" class="hint" style="margin-top:10px"></div>
+    </div>
+  </div>
 `;
+
+
+// ---------- auth + tabs init ----------
+applyPhase2Layout();
+setActiveTab("quote");
+wireTabButtons();
+wireWhatsappActions();
+
+// demo & login
+$("btnDemo")?.addEventListener("click", () => {
+  state.demo = true;
+  state.user = null;
+  setUserBadge();
+  $("btnLogout").style.display = "none";
+  closeAuthModal();
+  // demo: keep local adjustments
+  hydrateAdjUI();
+  updateAll();
+});
+
+$("btnLogin")?.addEventListener("click", async () => {
+  const email = $("loginEmail")?.value?.trim();
+  const password = $("loginPassword")?.value || "";
+  $("loginMsg").textContent = "Entrando...";
+  try {
+    await apiFetch("/api/login", { method: "POST", body: JSON.stringify({ email, password }) });
+    const me = await apiFetch("/api/me", { method: "GET" });
+    state.user = me.user;
+    state.demo = false;
+    applyServerSettingsToState(me.settings);
+    setUserBadge();
+    $("btnLogout").style.display = "";
+    // admin tab visibility
+    const isAdmin = state.user?.role === "admin";
+    $("tabAdmin").style.display = isAdmin ? "" : "none";
+    if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
+    if (isAdmin) loadAdminUsers().catch(() => {});
+    closeAuthModal();
+    updateAll();
+  } catch (e) {
+    $("loginMsg").textContent = `Error: ${e.message || e}`;
+  }
+});
+
+$("btnLogout")?.addEventListener("click", async () => {
+  try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
+  state.user = null;
+  state.demo = true;
+  setUserBadge();
+  $("btnLogout").style.display = "none";
+  $("tabAdmin").style.display = "none";
+  if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
+  openAuthModal("Sesión cerrada.");
+  updateAll();
+});
+
+async function bootstrapAuth() {
+  try {
+    const me = await apiFetch("/api/me", { method: "GET" });
+    state.user = me.user;
+    state.demo = false;
+    applyServerSettingsToState(me.settings);
+    $("btnLogout").style.display = "";
+    $("tabAdmin").style.display = state.user?.role === "admin" ? "" : "none";
+    if ($("tabAdminMobile")) $("tabAdminMobile").style.display = state.user?.role === "admin" ? "" : "none";
+    setUserBadge();
+    closeAuthModal();
+  } catch {
+    // no session: start in demo + show modal
+    state.user = null;
+    state.demo = true;
+    setUserBadge();
+    openAuthModal("");
+  }
+}
+
+
 
 // ---------- logic ----------
 const INV_LABELS = {
@@ -968,6 +1417,8 @@ async function exportPoster() {
 async function updateRates() {
   const status = $("status");
   status.textContent = "Actualizando…";
+  const rb0 = $("ratesBadge");
+  if (rb0) { rb0.textContent = "Tasas: …"; rb0.classList.remove("ok","warn"); }
 
   // Nota: para evitar CORS y tener una sola fuente, primero intentamos un endpoint propio
   // (Cloudflare Pages Functions). Si no existe (por ejemplo en Vite dev), caemos a fetch directo.
@@ -999,6 +1450,20 @@ async function updateRates() {
       sources: serverRates.sources || "API",
       ts: serverRates.ts || new Date().toISOString(),
     };
+
+    // UI badge: OK vs fallback
+    const rb = $("ratesBadge");
+    if (rb) {
+      const st = serverRates.status || (serverRates.warnings && serverRates.warnings.length ? "fallback" : "ok");
+      rb.textContent = st === "ok" ? "Tasas: OK" : "Tasas: fallback";
+      rb.classList.toggle("ok", st === "ok");
+      rb.classList.toggle("warn", st !== "ok");
+      if (serverRates.missing && serverRates.missing.length) {
+        rb.title = `Faltan: ${serverRates.missing.join(", ")}`;
+      } else {
+        rb.title = String(serverRates.sources || "");
+      }
+    }
 
     status.textContent = "Listo";
     paint();
@@ -1136,8 +1601,100 @@ function recalcAll() {
 // ---------- events ----------
 // En algunos entornos (o si alguien cambia el HTML) estos botones pueden no existir.
 // Evitamos que la app se caiga por un null.addEventListener().
+
+
+// ---------- admin UI ----------
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+}
+
+async function loadAdminUsers() {
+  if (state.user?.role !== "admin") return;
+  const data = await apiFetch("/api/admin/users", { method: "GET" });
+  const tbody = $("adminUsersTbody");
+  if (!tbody) return;
+  const users = data.users || [];
+  tbody.innerHTML = users
+    .map((u) => {
+      const exp = u.expires_at || "";
+      const active = Number(u.is_active) === 1;
+      return `<tr>
+        <td class="mono">${u.id}</td>
+        <td>${escapeHtml(u.email)}</td>
+        <td class="mono">${escapeHtml(u.role)}</td>
+        <td class="mono">${escapeHtml(u.plan)}</td>
+        <td class="mono">${escapeHtml(exp)}</td>
+        <td class="mono">${active ? "1" : "0"}</td>
+        <td>
+          <button class="btn xs" data-action="reset" data-id="${u.id}">Reset</button>
+          <button class="btn xs" data-action="toggle" data-id="${u.id}" data-active="${active ? "1":"0"}">${active ? "Desactivar":"Activar"}</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  // row actions
+  tbody.querySelectorAll("button[data-action]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const id = Number(b.dataset.id);
+      const action = b.dataset.action;
+      if (!id) return;
+      if (action === "reset") {
+        if (!confirm(`Resetear contraseña del usuario ${id}?`)) return;
+        try {
+          const r = await apiFetch("/api/admin/reset-password", {
+            method: "POST",
+            body: JSON.stringify({ user_id: id }),
+          });
+          $("adminResult").textContent = `Temp password (envíala por WhatsApp): ${r.temp_password}`;
+        } catch (e) {
+          $("adminResult").textContent = `Error: ${e.message || e}`;
+        }
+      }
+      if (action === "toggle") {
+        const current = b.dataset.active === "1";
+        try {
+          await apiFetch("/api/admin/update-user", {
+            method: "POST",
+            body: JSON.stringify({ user_id: id, is_active: !current }),
+          });
+          $("adminResult").textContent = "Actualizado.";
+          await loadAdminUsers();
+        } catch (e) {
+          $("adminResult").textContent = `Error: ${e.message || e}`;
+        }
+      }
+    });
+  });
+}
+
+async function adminCreateUser() {
+  const email = $("adminEmail")?.value?.trim();
+  const role = $("adminRole")?.value;
+  const plan = $("adminPlan")?.value;
+  const expires_at = $("adminExpires")?.value?.trim() || null;
+  const password = $("adminPassword")?.value || "";
+  const is_active = $("adminActive")?.value === "1";
+
+  $("adminResult").textContent = "Creando...";
+  try {
+    const r = await apiFetch("/api/admin/create-user", {
+      method: "POST",
+      body: JSON.stringify({ email, role, plan, expires_at, password: password || undefined, is_active }),
+    });
+    const temp = r.temp_password ? ` Temp password: ${r.temp_password}` : "";
+    $("adminResult").textContent = `OK: ${r.user.email}.${temp}`;
+    $("adminEmail").value = "";
+    $("adminPassword").value = "";
+    await loadAdminUsers();
+  } catch (e) {
+    $("adminResult").textContent = `Error: ${e.message || e}`;
+  }
+}
 $("btnUpdate")?.addEventListener("click", updateRates);
 $("btnExport")?.addEventListener("click", exportPoster);
+$("btnAdminCreate")?.addEventListener("click", adminCreateUser);
+$("btnAdminReload")?.addEventListener("click", loadAdminUsers);
 
 // ajustes (%)
 ["adjBcv","adjPar","adjUsdtCop","adjUsdtVes"].forEach((id) => {
@@ -1184,5 +1741,8 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 
 // auto al abrir
 applyQuoteModeUI();
-hydrateAdjUI();
-updateRates();
+// Primero intentamos sesión (si existe) y luego cargamos tasas
+bootstrapAuth().finally(() => {
+  hydrateAdjUI();
+  updateRates();
+});

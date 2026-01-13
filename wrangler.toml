@@ -1,0 +1,16 @@
+name = "cazeexchange"
+compatibility_date = "2026-01-12"
+
+# For local dev with:
+#   npm run build
+#   wrangler pages dev ./dist --d1=DB
+pages_build_output_dir = "dist"
+
+# D1 binding (configure in Pages dashboard too)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "cazeexchange"
+# database_id = "YOUR_DB_ID"
+
+[migrations]
+dir = "migrations"
