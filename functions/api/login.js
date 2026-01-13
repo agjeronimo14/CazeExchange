@@ -1,50 +1,65 @@
-import { json, err, getJsonBody } from "../_lib/http.js";
 import { pbkdf2Verify } from "../_lib/crypto.js";
-import { createSession, setSessionCookie } from "../_lib/auth.js";
+import { json, buildSetCookie, makeSessionId } from "../_lib/auth.js";
 
-export async function onRequest(context) {
-  if (context.request.method !== "POST") return err(405, "Method not allowed");
+export async function onRequestPost({ request, env }) {
+  try {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "Expected JSON" }, 400);
+    }
 
-  const body = await getJsonBody(context.request);
-  if (!body) return err(400, "Expected JSON");
-  const email = String(body.email || "").trim().toLowerCase();
-  const password = String(body.password || "");
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (!email || !password) return json({ error: "Missing email/password" }, 400);
+    if (!env.DB) return json({ error: "Missing D1 binding env.DB" }, 500);
 
-  if (!email || !password) return err(400, "Email and password are required");
+    const user = await env.DB.prepare(
+      "SELECT id,email,password_hash,role,plan,expires_at,is_active FROM users WHERE email = ?"
+    ).bind(email).first();
 
-  const db = context.env.DB;
-  if (!db) return err(500, "Missing D1 binding (env.DB)");
+    if (!user) return json({ error: "Invalid credentials" }, 401);
+    if (Number(user.is_active) !== 1) return json({ error: "User inactive" }, 403);
 
-  const nowIso = new Date().toISOString();
-  const user = await db
-    .prepare(
-      "SELECT id, email, password_hash, role, plan, expires_at, is_active FROM users WHERE email = ?"
-    )
-    .bind(email)
-    .first();
+    // expiración (si aplica)
+    if (user.expires_at) {
+      const exp = new Date(user.expires_at).getTime();
+      if (Number.isFinite(exp) && Date.now() > exp) {
+        return json({ error: "Plan expired" }, 403);
+      }
+    }
 
-  if (!user) return err(401, "Invalid credentials");
-  if (Number(user.is_active) !== 1) return err(403, "User disabled");
-  if (user.expires_at && user.expires_at <= nowIso) return err(403, "Plan expired");
+    const ok = await pbkdf2Verify(password, user.password_hash);
+    if (!ok) return json({ error: "Invalid credentials" }, 401);
 
-  const ok = await pbkdf2Verify(password, user.password_hash);
-  if (!ok) return err(401, "Invalid credentials");
+    // crear sesión
+    const sid = makeSessionId();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(); // 14 días
 
-  const { sid, expires } = await createSession(context, user.id, { days: 30 });
-  const headers = new Headers();
-  headers.append("Set-Cookie", setSessionCookie(context, sid, expires));
+    await env.DB.prepare(
+      "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
+    ).bind(sid, user.id, expiresAt).run();
 
-  return json(
-    {
-      ok: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        plan: user.plan,
-        expires_at: user.expires_at,
-      },
-    },
-    { headers }
-  );
+    const setCookie = buildSetCookie("ce_session", sid, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 14,
+    });
+
+    return json(
+      { ok: true, user: { id: user.id, email: user.email, role: user.role, plan: user.plan } },
+      200,
+      { "set-cookie": setCookie }
+    );
+  } catch (e) {
+    console.error("LOGIN_CRASH:", e);
+    return new Response(JSON.stringify({
+      error: "Login crashed",
+      message: String(e?.message || e),
+      stack: String(e?.stack || "")
+    }), { status: 500, headers: { "content-type": "application/json; charset=utf-8" } });
+  }
 }

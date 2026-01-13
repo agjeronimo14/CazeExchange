@@ -6,7 +6,6 @@ function randomBytes(n) {
   return a;
 }
 
-// Base64 (no-url) para guardar en DB
 function bytesToBase64(bytes) {
   let s = "";
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
@@ -21,18 +20,17 @@ function base64ToBytes(b64) {
 }
 
 function bytesToBase64Url(bytes) {
-  // base64url: reemplaza +/ y quita =
   return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-
-// Token para sesiones / reset passwords (base64url)
 export function randomToken(size = 32) {
-  return Buffer.from(randomBytes(size)).toString("base64url");
+  return bytesToBase64Url(randomBytes(size));
 }
 
-// === Compat: pbkdf2Hash / pbkdf2Verify (lo que esperan tus imports) ===
 export async function pbkdf2Hash(password, iterations = 100000) {
+  // Cloudflare WebCrypto limita a 100000
+  if (iterations > 100000) iterations = 100000;
+
   const salt = randomBytes(16);
 
   const key = await crypto.subtle.importKey(
@@ -50,9 +48,7 @@ export async function pbkdf2Hash(password, iterations = 100000) {
   );
 
   const hash = new Uint8Array(bits);
-
-  // Formato: pbkdf2$sha256$iter$saltB64$hashB64
-  return `pbkdf2$sha256$${iterations}$${b64(salt)}$${b64(hash)}`;
+  return `pbkdf2$sha256$${iterations}$${bytesToBase64(salt)}$${bytesToBase64(hash)}`;
 }
 
 export async function pbkdf2Verify(password, stored) {
@@ -60,11 +56,12 @@ export async function pbkdf2Verify(password, stored) {
     const [algo, hashName, iterStr, saltB64, hashB64] = String(stored).split("$");
     if (algo !== "pbkdf2" || hashName !== "sha256") return false;
 
-    const iterations = Number(iterStr);
+    let iterations = Number(iterStr);
     if (!Number.isFinite(iterations) || iterations <= 0) return false;
+    if (iterations > 100000) iterations = 100000;
 
-    const salt = b64ToBytes(saltB64);
-    const expected = b64ToBytes(hashB64);
+    const salt = base64ToBytes(saltB64);
+    const expected = base64ToBytes(hashB64);
 
     const key = await crypto.subtle.importKey(
       "raw",
@@ -91,11 +88,9 @@ export async function pbkdf2Verify(password, stored) {
   }
 }
 
-// === Aliases opcionales (por si en otros lados usas hashPassword/verifyPassword) ===
+// Aliases por si los usas en otros lugares
 export const hashPassword = pbkdf2Hash;
 export const verifyPassword = pbkdf2Verify;
-
-// Para sesiones si alguna parte lo usa con otro nombre
 export function generateSessionId() {
   return randomToken(32);
 }

@@ -16,6 +16,48 @@ function parseCookies(cookieHeader = "") {
   return out;
 }
 
+
+
+export function json(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", ...extraHeaders },
+  });
+}
+
+export function getCookie(request, name) {
+  const cookie = request.headers.get("cookie") || "";
+  const parts = cookie.split(";").map(s => s.trim());
+  for (const p of parts) {
+    if (p.startsWith(name + "=")) return decodeURIComponent(p.slice(name.length + 1));
+  }
+  return null;
+}
+
+export function buildSetCookie(name, value, opts = {}) {
+  const {
+    httpOnly = true,
+    secure = true,
+    sameSite = "Lax",
+    path = "/",
+    maxAge = null,
+  } = opts;
+
+  const segs = [];
+  segs.push(`${name}=${encodeURIComponent(value)}`);
+  segs.push(`Path=${path}`);
+  segs.push(`SameSite=${sameSite}`);
+  if (httpOnly) segs.push("HttpOnly");
+  if (secure) segs.push("Secure");
+  if (maxAge !== null) segs.push(`Max-Age=${maxAge}`);
+  return segs.join("; ");
+}
+
+export function makeSessionId() {
+  return randomToken(32);
+}
+
+
 function cookieSerialize(name, value, opts = {}) {
   const parts = [`${name}=${encodeURIComponent(value)}`];
   if (opts.maxAge != null) parts.push(`Max-Age=${opts.maxAge}`);
