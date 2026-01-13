@@ -1628,7 +1628,9 @@ async function loadAdminUsers() {
         <td>
           <button class="btn xs" data-action="reset" data-id="${u.id}">Reset</button>
           <button class="btn xs" data-action="toggle" data-id="${u.id}" data-active="${active ? "1":"0"}">${active ? "Desactivar":"Activar"}</button>
+          <button class="btn xs" data-action="delete" data-id="${u.id}">Eliminar</button>
         </td>
+
       </tr>`;
     })
     .join("");
@@ -1664,7 +1666,22 @@ async function loadAdminUsers() {
           $("adminResult").textContent = `Error: ${e.message || e}`;
         }
       }
+      if (action === "delete") {
+  if (!confirm(`ELIMINAR usuario ${id}? Esto borra settings/sesiones/historial por cascade.`)) return;
+  try {
+    await apiFetch("/api/admin/delete-user", {
+      method: "POST",
+      body: JSON.stringify({ user_id: id }),
     });
+    $("adminResult").textContent = "Usuario eliminado.";
+    await loadAdminUsers();
+  } catch (e) {
+    $("adminResult").textContent = `Error: ${e.message || e}`;
+  }
+}
+
+    });
+    
   });
 }
 
@@ -1717,6 +1734,8 @@ $("btnAdjReset")?.addEventListener("click", () => {
   hydrateAdjUI();
   updateRates();
 });
+
+
 
 
 // Modo pro (COP vs Objetivo)
