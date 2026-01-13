@@ -699,9 +699,26 @@ mount.innerHTML = `
               </select>
             </div>
             <div class="field">
-              <label>Expira (ISO o vacío)</label>
-              <input id="adminExpires" placeholder="2026-02-01T00:00:00Z" />
-            </div>
+  <label>Expira en (seleccionable)</label>
+  <div class="row" style="gap:8px; align-items:end">
+    <input id="adminExpireQty" type="number" min="0" placeholder="30" style="max-width:110px" />
+    <select id="adminExpireUnit">
+      <option value="hours">horas</option>
+      <option value="days" selected>días</option>
+      <option value="months">meses</option>
+      <option value="years">años</option>
+    </select>
+    <button id="btnAdminExpireApply" class="btn xs" type="button">Aplicar</button>
+    <button id="btnAdminExpireClear" class="btn xs" type="button">Sin expirar</button>
+  </div>
+  <div class="hint">Esto llena el campo ISO automáticamente (desde “ahora”).</div>
+</div>
+
+<div class="field">
+  <label>Expira (ISO)</label>
+  <input id="adminExpires" placeholder="2026-02-01T00:00:00Z" />
+</div>
+
           </div>
 
           <div class="row">
@@ -1684,6 +1701,32 @@ async function loadAdminUsers() {
     
   });
 }
+
+function addToNow(qty, unit) {
+  const n = Number(qty);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const d = new Date();
+
+  if (unit === "hours") d.setHours(d.getHours() + n);
+  if (unit === "days") d.setDate(d.getDate() + n);
+  if (unit === "months") d.setMonth(d.getMonth() + n);
+  if (unit === "years") d.setFullYear(d.getFullYear() + n);
+
+  return d.toISOString();
+}
+
+$("btnAdminExpireApply")?.addEventListener("click", () => {
+  const qty = $("adminExpireQty")?.value;
+  const unit = $("adminExpireUnit")?.value || "days";
+  const iso = addToNow(qty, unit);
+  $("adminExpires").value = iso;
+});
+
+$("btnAdminExpireClear")?.addEventListener("click", () => {
+  if ($("adminExpireQty")) $("adminExpireQty").value = "";
+  $("adminExpires").value = "";
+});
+
 
 async function adminCreateUser() {
   const email = $("adminEmail")?.value?.trim();
