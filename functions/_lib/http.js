@@ -8,24 +8,23 @@ export function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
-
-export function text(data, init = {}) {
-  const headers = new Headers(init.headers || {});
-  if (!headers.has("content-type")) headers.set("content-type", "text/plain; charset=utf-8");
-  if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
-  return new Response(data, { ...init, headers });
+export function err(status = 400, message = "Error", extra = null) {
+  const body = { error: message };
+  if (extra && typeof extra === "object") {
+    for (const [k, v] of Object.entries(extra)) body[k] = v;
+  }
+  return json(body, status);
 }
 
-export function err(status, message, extra = {}) {
-  return json({ error: message, ...extra }, { status });
-}
-
-export function getJsonBody(request) {
-  const ct = request.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) return null;
-  return request.json();
+export async function getJsonBody(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
 }
 
 export function isHttps(request) {
-  return new URL(request.url).protocol === "https:";
+  const proto = request.headers.get("x-forwarded-proto") || "";
+  return proto.toLowerCase().includes("https") || request.url.startsWith("https:");
 }

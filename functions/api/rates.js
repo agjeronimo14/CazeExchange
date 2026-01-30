@@ -1,14 +1,19 @@
 // Cloudflare Pages Function: GET /api/rates
 //
-// Objetivo:
-// - Dar tasas "del día" sin costos (sin keys), desde fuentes públicas.
-// - Evitar CORS: el frontend llama a este endpoint, y este endpoint hace fetch server-side.
-// - Si alguna fuente falla, devolvemos lo que tengamos (y el frontend permite edición manual).
-//
-// Fuentes:
-// - Binance P2P (sin key) para USDT/COP (BUY) y USDT/VES (SELL) -> precio "market" P2P.
-// - DolarAPI (Venezuela) para USD/VES oficial (BCV) y paralelo.
-// - ER-API (ExchangeRate-API mirror) para USD/COP y EURUSD.
+// Devuelve tasas usadas por el frontend para el cotizador.
+// Incluye un estado PRO de calidad (primary/approx/missing) + detalle de fuentes.
+
+function json(data, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=60",
+      "access-control-allow-origin": "*",
+      ...extraHeaders,
+    },
+  });
+}
 
 function asNum(x) {
   const n = Number(String(x ?? "").replace(",", "."));
@@ -35,12 +40,23 @@ function median(values) {
 
 async function fetchJson(url, init) {
   const res = await fetch(url, init);
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  return await res.json();
+  const txt = await res.text();
+  let data = null;
+  try {
+    data = txt ? JSON.parse(txt) : null;
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status} ${url}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
 }
 
 async function binanceP2P({ fiat, tradeType, transAmount }) {
-  // Endpoint público usado ampliamente (puede cambiar en el tiempo).
   const url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search";
   const payload = {
     page: 1,
@@ -56,7 +72,6 @@ async function binanceP2P({ fiat, tradeType, transAmount }) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      // algunos entornos de CF agradecen un UA explícito
       "user-agent": "Mozilla/5.0 (Cloudflare Pages Function)",
     },
     body: JSON.stringify(payload),
@@ -66,12 +81,21 @@ async function binanceP2P({ fiat, tradeType, transAmount }) {
     .map((row) => asNum(row?.adv?.price))
     .filter((n) => Number.isFinite(n));
 
-  // Usamos mediana de los primeros 10 anuncios para reducir outliers.
   return median(prices);
 }
 
+async function fetchEurVesBcv() {
+  // Opcional: tu Worker que devuelve array con tasas BCV (incluye EUR)
+  const url = "https://remesas-proxy.agjeronimo14.workers.dev/bcv";
+  const data = await fetchJson(url);
+  if (!Array.isArray(data)) return null;
+  const eur = data.find((x) => String(x?.symbol || "").toUpperCase() === "EUR");
+  const v = asNum(eur?.rate ?? eur?.value ?? eur?.price);
+  return Number.isFinite(v) ? v : null;
+}
+
 export async function onRequest(context) {
-  // --- CORS (para que funcione desde localhost durante desarrollo) ---
+  // --- CORS preflight ---
   if (context.request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -91,6 +115,7 @@ export async function onRequest(context) {
   const out = {
     ok: true,
     ts: new Date().toISOString(),
+
     // valores principales
     usdtCopBuy: null,
     usdtVesSell: null,
@@ -98,16 +123,25 @@ export async function onRequest(context) {
     usdVesParallel: null,
     usdCop: null,
     eurUsd: null,
-    // meta
+    eurVesBcv: null,
+
+    // meta legacy (para compat con UI existente)
     sources: [],
     warnings: [],
   };
+
+  // Track fallbacks
+  let usedApproxUsdtCop = false;
+  let usedApproxUsdtVes = false;
+  let binanceCopErr = null;
+  let binanceVesErr = null;
 
   // 1) Binance P2P (USDT/COP y USDT/VES)
   try {
     out.usdtCopBuy = await binanceP2P({ fiat: "COP", tradeType: "BUY", transAmount: copAmount });
     if (Number.isFinite(out.usdtCopBuy)) out.sources.push("Binance P2P USDT/COP (BUY)");
   } catch (e) {
+    binanceCopErr = e;
     out.warnings.push(`Binance P2P COP falló: ${String(e?.message ?? e)}`);
   }
 
@@ -115,6 +149,7 @@ export async function onRequest(context) {
     out.usdtVesSell = await binanceP2P({ fiat: "VES", tradeType: "SELL", transAmount: vesAmount });
     if (Number.isFinite(out.usdtVesSell)) out.sources.push("Binance P2P USDT/VES (SELL)");
   } catch (e) {
+    binanceVesErr = e;
     out.warnings.push(`Binance P2P VES falló: ${String(e?.message ?? e)}`);
   }
 
@@ -138,35 +173,67 @@ export async function onRequest(context) {
     const cop = asNum(fx?.rates?.COP ?? fx?.conversion_rates?.COP);
     const eurPerUsd = asNum(fx?.rates?.EUR ?? fx?.conversion_rates?.EUR);
     out.usdCop = cop;
-    out.eurUsd = eurPerUsd ? 1 / eurPerUsd : null;
+    out.eurUsd = eurPerUsd ? 1 / eurPerUsd : null; // EURUSD
     if (Number.isFinite(out.usdCop)) out.sources.push("ER-API USD/COP");
     if (Number.isFinite(out.eurUsd)) out.sources.push("ER-API EURUSD (derivado)");
   } catch (e) {
     out.warnings.push(`ER-API falló: ${String(e?.message ?? e)}`);
   }
 
+  // 4) EUR/VES BCV (opcional)
+  try {
+    out.eurVesBcv = await fetchEurVesBcv();
+    if (Number.isFinite(out.eurVesBcv)) out.sources.push("Worker BCV (EUR/VES)");
+  } catch (e) {
+    // no es crítico
+    out.warnings.push(`BCV worker falló: ${String(e?.message ?? e)}`);
+  }
+
   // Si Binance no dio USDT/COP o USDT/VES, usamos aproximaciones por forex.
   if (!Number.isFinite(out.usdtCopBuy) && Number.isFinite(out.usdCop)) {
     out.usdtCopBuy = out.usdCop; // aproximación USDT≈USD
+    usedApproxUsdtCop = true;
     out.sources.push("USDT/COP ≈ USD/COP (aprox)");
   }
   if (!Number.isFinite(out.usdtVesSell) && Number.isFinite(out.usdVesParallel)) {
     out.usdtVesSell = out.usdVesParallel; // aproximación USDT≈USD
+    usedApproxUsdtVes = true;
     out.sources.push("USDT/VES ≈ USD/VES paralelo (aprox)");
   }
 
-  
-  // Estado simple para UI
+  // Estado PRO
   const required = ["usdVesBcv", "usdVesParallel", "usdtCopBuy", "usdtVesSell"];
   const missing = required.filter((k) => !Number.isFinite(out[k]));
-  out.status = missing.length === 0 && out.warnings.length === 0 ? "ok" : "fallback";
-  out.missing = missing;
+  const fallback_rates = [];
+  if (usedApproxUsdtCop) fallback_rates.push("usdt_cop");
+  if (usedApproxUsdtVes) fallback_rates.push("usdt_ves");
 
-// Cache corto para evitar rate limit (60s)
-  const headers = {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "public, max-age=60",
-    "Access-Control-Allow-Origin": "*",
+  let quality = "primary";
+  if (missing.length) quality = "missing";
+  else if (fallback_rates.length) quality = "approx";
+
+  // sources_detail para tooltip (lo usa el frontend)
+  const sources_detail = {
+    bcv: Number.isFinite(out.usdVesBcv) ? "BCV (DolarAPI)" : "—",
+    parallel: Number.isFinite(out.usdVesParallel) ? "Paralelo (DolarAPI)" : "—",
+    usdt_cop: Number.isFinite(out.usdtCopBuy)
+      ? (usedApproxUsdtCop
+          ? `Aprox: USD/COP${binanceCopErr?.status ? ` (Binance ${binanceCopErr.status} → aprox)` : ""}`
+          : "Binance P2P")
+      : "—",
+    usdt_ves: Number.isFinite(out.usdtVesSell)
+      ? (usedApproxUsdtVes
+          ? `Aprox: USD/VES paralelo${binanceVesErr?.status ? ` (Binance ${binanceVesErr.status} → aprox)` : ""}`
+          : "Binance P2P")
+      : "—",
   };
-  return new Response(JSON.stringify(out), { headers });
+
+  // status legacy
+  out.status = quality === "primary" && out.warnings.length === 0 ? "ok" : "fallback";
+  out.missing = missing;
+  out.quality = quality;
+  out.fallback_rates = fallback_rates;
+  out.sources_detail = sources_detail;
+
+  return json(out);
 }

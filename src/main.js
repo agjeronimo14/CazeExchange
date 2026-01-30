@@ -24,7 +24,7 @@ const API_BASE = (() => {
 
 // Fetch helper (same-origin by default)
 async function apiFetch(path, opts = {}) {
-  const url = `${path.startsWith("http") ? "" : ""}${path}`;
+  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
   const res = await fetch(url, {
     ...opts,
     headers: { "content-type": "application/json", ...(opts.headers || {}) },
@@ -40,7 +40,220 @@ async function apiFetch(path, opts = {}) {
     throw err;
   }
   return data;
+  
 }
+
+// ---------------- Branding (por usuario) ----------------
+const BRANDING_KEY = "CAZE_BRANDING";
+const BRAND_THEMES = ["ocean", "emerald", "sunset", "midnight", "minimal"];
+const DEFAULT_BRANDING = Object.freeze({
+  theme: "ocean",
+  accent: "#4ea1ff",
+  brand_name: "CAZEEXCHANGE",
+});
+
+function safeLsGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeLsSet(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+
+function isHexColor(v) {
+  const s = String(v || "").trim();
+  return /^#?[0-9a-fA-F]{6}$/.test(s) || /^#?[0-9a-fA-F]{3}$/.test(s);
+}
+
+function normalizeBranding(input = {}) {
+  const out = { ...DEFAULT_BRANDING };
+
+  // theme
+  const theme = String(input.theme || "").trim().toLowerCase();
+  out.theme = BRAND_THEMES.includes(theme) ? theme : DEFAULT_BRANDING.theme;
+
+  // accent
+  let accent = String(input.accent || input.accent_color || "").trim();
+  if (accent && !accent.startsWith("#")) accent = `#${accent}`;
+  if (/^#[0-9a-fA-F]{3}$/.test(accent)) {
+    accent = `#${accent[1]}${accent[1]}${accent[2]}${accent[2]}${accent[3]}${accent[3]}`;
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(accent)) accent = DEFAULT_BRANDING.accent;
+  out.accent = accent.toLowerCase();
+
+  // brand name
+  let name = String(input.brand_name ?? input.brandName ?? "");
+  name = name.replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
+  if (!name) name = DEFAULT_BRANDING.brand_name;
+  if (name.length > 40) name = name.slice(0, 40).trim();
+  out.brand_name = name;
+
+  return out;
+}
+
+function loadBrandingLocal() {
+  const raw = safeLsGet(BRANDING_KEY);
+  if (!raw) return { ...DEFAULT_BRANDING };
+  try {
+    const obj = JSON.parse(raw);
+    return normalizeBranding(obj);
+  } catch {
+    return { ...DEFAULT_BRANDING };
+  }
+}
+
+function saveBrandingLocal(branding) {
+  const b = normalizeBranding(branding);
+  safeLsSet(BRANDING_KEY, JSON.stringify(b));
+}
+
+function hexToRgbTriplet(hex) {
+  const h = String(hex || "").trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `${r},${g},${b}`;
+}
+
+function getBranding() {
+  return state?.branding ? normalizeBranding(state.branding) : { ...DEFAULT_BRANDING };
+}
+
+function getBrandName() {
+  return getBranding().brand_name || DEFAULT_BRANDING.brand_name;
+}
+
+function brandSlug() {
+  const name = getBrandName();
+  const s = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return s || "cazeexchange";
+}
+
+function applyBrandingToUI(branding = getBranding()) {
+  const b = normalizeBranding(branding);
+  document.documentElement.dataset.theme = b.theme;
+  document.documentElement.style.setProperty("--accent", b.accent);
+  const triplet = hexToRgbTriplet(b.accent);
+  if (triplet) document.documentElement.style.setProperty("--accent-rgb", triplet);
+
+  const bb = document.getElementById("brandBadge");
+  if (bb) bb.textContent = b.brand_name;
+
+  const ab = document.getElementById("authBrandBadge");
+  if (ab) ab.textContent = b.brand_name;
+
+  const pb = document.getElementById("posterBrand");
+  if (pb) pb.textContent = b.brand_name;
+}
+
+function hydrateBrandingUI() {
+  const b = getBranding();
+  const nameEl = document.getElementById("brandName");
+  const themeEl = document.getElementById("brandTheme");
+  const accentEl = document.getElementById("brandAccent");
+  const pickEl = document.getElementById("brandAccentPicker");
+  if (nameEl) nameEl.value = b.brand_name;
+  if (themeEl) themeEl.value = b.theme;
+  if (accentEl) accentEl.value = b.accent;
+  if (pickEl) pickEl.value = b.accent;
+
+  const saveBtn = document.getElementById("btnBrandSave");
+  if (saveBtn) saveBtn.disabled = !!state.demo || !state.user;
+
+  const msgEl = document.getElementById("brandMsg");
+  if (msgEl) {
+    msgEl.textContent = state.demo || !state.user
+      ? "Modo demo: puedes previsualizar pero necesitas iniciar sesión para guardar."
+      : "";
+  }
+}
+
+function readBrandingFromUI() {
+  return normalizeBranding({
+    brand_name: document.getElementById("brandName")?.value,
+    theme: document.getElementById("brandTheme")?.value,
+    accent: document.getElementById("brandAccent")?.value,
+  });
+}
+
+async function saveBrandingToServer() {
+  const msgEl = document.getElementById("brandMsg");
+
+  if (state.demo || !state.user) {
+    if (msgEl) msgEl.textContent = "Inicia sesión para guardar tu branding.";
+    openAuthModal("Inicia sesión para guardar tu branding");
+    return;
+  }
+
+  const branding = readBrandingFromUI();
+  if (msgEl) msgEl.textContent = "Guardando…";
+
+  try {
+    await apiFetch("/api/branding", {
+      method: "POST",
+      body: JSON.stringify(branding),
+    });
+
+    state.branding = branding;
+    saveBrandingLocal(branding);
+    applyBrandingToUI(branding);
+    if (msgEl) msgEl.textContent = "Guardado ✅";
+  } catch (e) {
+    if (msgEl) msgEl.textContent = `Error: ${e?.message || "No se pudo guardar"}`;
+  } finally {
+    setTimeout(() => {
+      if (msgEl && msgEl.textContent === "Guardado ✅") msgEl.textContent = "";
+    }, 1600);
+  }
+}
+
+function wireBrandingUI() {
+  const nameEl = document.getElementById("brandName");
+  const themeEl = document.getElementById("brandTheme");
+  const accentEl = document.getElementById("brandAccent");
+  const pickEl = document.getElementById("brandAccentPicker");
+  const saveBtn = document.getElementById("btnBrandSave");
+  const resetBtn = document.getElementById("btnBrandReset");
+
+  function preview() {
+    const b = readBrandingFromUI();
+    state.branding = b;
+    saveBrandingLocal(b);
+    applyBrandingToUI(b);
+  }
+
+  nameEl?.addEventListener("input", preview);
+  themeEl?.addEventListener("change", preview);
+
+  // hex input ↔ picker
+  pickEl?.addEventListener("input", () => {
+    if (accentEl) accentEl.value = pickEl.value;
+    preview();
+  });
+
+  accentEl?.addEventListener("input", () => {
+    if (pickEl && isHexColor(accentEl.value)) {
+      let v = String(accentEl.value).trim();
+      if (v && !v.startsWith("#")) v = `#${v}`;
+      if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+        v = `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
+      }
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) pickEl.value = v;
+    }
+    preview();
+  });
+
+  saveBtn?.addEventListener("click", saveBrandingToServer);
+  resetBtn?.addEventListener("click", () => {
+    const b = { ...DEFAULT_BRANDING };
+    state.branding = b;
+    saveBrandingLocal(b);
+    hydrateBrandingUI();
+    applyBrandingToUI(b);
+  });
+}
+
+
 
 function setUserBadge() {
   const el = $("userBadge");
@@ -63,10 +276,22 @@ function isLimitedUser() {
 function applyRoleGates() {
   const limited = isLimitedUser();
   if ($("btnExport")) $("btnExport").disabled = limited;
+
+  // Branding: se puede previsualizar en demo, pero solo se guarda con sesión
+  const canSaveBranding = !state.demo && !!state.user;
+  if ($("btnBrandSave")) $("btnBrandSave").disabled = !canSaveBranding;
+
   const msg = limited ? "Funciones limitadas (demo/trial). Para Pro, pide activación por WhatsApp." : "";
-  const el = $("loginMsg"); // reuse? no
   // show in status badge title
   if ($("status")) $("status").title = msg;
+
+  const bmsg = $("brandMsg");
+  if (bmsg) {
+    if (!canSaveBranding && !bmsg.textContent) {
+      bmsg.textContent = "Modo demo: puedes previsualizar el branding, pero debes iniciar sesión para guardarlo.";
+    }
+    if (canSaveBranding && bmsg.textContent.startsWith("Modo demo")) bmsg.textContent = "";
+  }
 }
 
 
@@ -434,6 +659,7 @@ const state = {
   user: null,
   demo: true,
   adj: loadAdj(),
+  branding: loadBrandingLocal(),
   // tasas auto
   usdVesOficial: null,     // USD/VES (BCV oficial)
   usdVesParalelo: null,    // USD/VES paralelo
@@ -462,7 +688,7 @@ mount.innerHTML = `
       <div class="brand">
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
           <h1 style="margin:0">Remesas (COP → USDT → VES)</h1>
-          <span class="badge mono">CAZEEXCHANGE</span>
+          <span class="badge mono" id="brandBadge">CAZEEXCHANGE</span>
           <span id="ratesBadge" class="badge mono">Tasas: —</span>
         </div>
         <small id="userBadge" class="badge">Modo: demo (sin login)</small>
@@ -608,6 +834,43 @@ mount.innerHTML = `
         
         </section>
 
+        <section class="pane" data-tabs="rates">
+          <h2>Branding (tu marca)</h2>
+          <p class="hint">Personaliza el nombre y los colores que salen en la imagen exportada. En <b>demo</b> puedes previsualizar, pero para guardar debes iniciar sesión.</p>
+
+          <div class="row">
+            <div class="field">
+              <label>Nombre de marca (sale en la imagen)</label>
+              <input id="brandName" placeholder="Ej: Remesas El Caribe" />
+            </div>
+
+            <div class="field">
+              <label>Tema</label>
+              <select id="brandTheme">
+                <option value="ocean">Ocean</option>
+                <option value="emerald">Emerald</option>
+                <option value="sunset">Sunset</option>
+                <option value="midnight">Midnight</option>
+                <option value="minimal">Minimal</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Accent color</label>
+              <div class="colorRow">
+                <input id="brandAccent" placeholder="#4ea1ff" />
+                <input id="brandAccentPicker" type="color" value="#4ea1ff" />
+              </div>
+            </div>
+          </div>
+
+          <div class="row" style="align-items:center">
+            <button id="btnBrandSave" class="btn primary" type="button">Guardar branding</button>
+            <button id="btnBrandReset" class="btn" type="button">Restablecer</button>
+            <span id="brandMsg" class="hint" style="margin-left:auto"></span>
+          </div>
+        </section>
+
         <section class="pane" data-tabs="quote">
           <h2>Cálculo inverso (opcional): “quiero que me llegue…”</h2>
         <p class="hint">Escribe el objetivo y te calcula cuánto debe entregar el cliente (COP) considerando tu ganancia.</p>
@@ -750,7 +1013,14 @@ mount.innerHTML = `
             <table class="table">
               <thead>
                 <tr>
-                  <th>ID</th><th>Email</th><th>Role</th><th>Plan</th><th>Expira</th><th>Activo</th><th>Acciones</th>
+                  <th>ID</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Plan</th>
+                  <th>Expira</th>
+                  <th>Días</th>
+                  <th>Activo</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="adminUsersTbody"></tbody>
@@ -823,7 +1093,7 @@ mount.innerHTML = `
 
         <div id="poster" class="poster">
           <div class="posterTop">
-            <div class="posterBrand">CAZEEXCHANGE</div>
+            <div id="posterBrand" class="posterBrand">CAZEEXCHANGE</div>
             <div class="posterTitle">Cotiza en segundos. Envía a Venezuela.</div>
             <div class="posterSub no-export" id="posterMeta">—</div>
 
@@ -867,7 +1137,7 @@ mount.innerHTML = `
     <div class="modalCard">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
         <h2 style="margin:0">Iniciar sesión</h2>
-        <span class="badge mono">CazeExchange</span>
+        <span class="badge mono" id="authBrandBadge">CazeExchange</span>
       </div>
       <p class="hint">Si no tienes usuario aún, puedes usar el modo demo. Para Pro, te activan por WhatsApp.</p>
 
@@ -897,10 +1167,18 @@ setActiveTab("quote");
 wireTabButtons();
 wireWhatsappActions();
 
+// branding init (preview inmediato)
+applyBrandingToUI(state.branding);
+wireBrandingUI();
+hydrateBrandingUI();
+
 // demo & login
 $("btnDemo")?.addEventListener("click", () => {
   state.demo = true;
   state.user = null;
+  state.branding = loadBrandingLocal();
+  applyBrandingToUI(state.branding);
+  hydrateBrandingUI();
   setUserBadge();
   $("btnLogout").style.display = "none";
   closeAuthModal();
@@ -919,7 +1197,18 @@ $("btnLogin")?.addEventListener("click", async () => {
     state.user = me.user;
     state.demo = false;
     applyServerSettingsToState(me.settings);
-    setUserBadge();
+
+    // branding del usuario (server)
+    if (me.branding) {
+      state.branding = normalizeBranding(me.branding);
+      saveBrandingLocal(state.branding);
+    } else {
+      state.branding = loadBrandingLocal();
+    }
+    applyBrandingToUI(state.branding);
+    hydrateBrandingUI();
+
+        setUserBadge();
     $("btnLogout").style.display = "";
     // admin tab visibility
     const isAdmin = state.user?.role === "admin";
@@ -937,6 +1226,9 @@ $("btnLogout")?.addEventListener("click", async () => {
   try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
   state.user = null;
   state.demo = true;
+  state.branding = loadBrandingLocal();
+  applyBrandingToUI(state.branding);
+  hydrateBrandingUI();
   setUserBadge();
   $("btnLogout").style.display = "none";
   $("tabAdmin").style.display = "none";
@@ -951,16 +1243,38 @@ async function bootstrapAuth() {
     state.user = me.user;
     state.demo = false;
     applyServerSettingsToState(me.settings);
-    $("btnLogout").style.display = "";
-    $("tabAdmin").style.display = state.user?.role === "admin" ? "" : "none";
-    if ($("tabAdminMobile")) $("tabAdminMobile").style.display = state.user?.role === "admin" ? "" : "none";
+
+    // branding del usuario (server)
+    if (me.branding) {
+      state.branding = normalizeBranding(me.branding);
+      saveBrandingLocal(state.branding);
+    } else {
+      state.branding = loadBrandingLocal();
+    }
+    applyBrandingToUI(state.branding);
+    hydrateBrandingUI();
+
+
     setUserBadge();
+    $("btnLogout").style.display = "";
+    // admin tab visibility
+    const isAdmin = state.user?.role === "admin";
+    $("tabAdmin").style.display = isAdmin ? "" : "none";
+    if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
+    if (isAdmin) loadAdminUsers().catch(() => {});
+
     closeAuthModal();
   } catch {
     // no session: start in demo + show modal
     state.user = null;
     state.demo = true;
+    state.branding = loadBrandingLocal();
+    applyBrandingToUI(state.branding);
+    hydrateBrandingUI();
     setUserBadge();
+    $("btnLogout").style.display = "none";
+    $("tabAdmin").style.display = "none";
+    if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
     openAuthModal("");
   }
 }
@@ -1082,7 +1396,7 @@ function setSummary({
   vesUsed,
   methodLabel,
   copPerVes,
-  waPrefix = "CazeExchange — Cotización remesa",
+  waPrefix = `${getBrandName()} — Cotización remesa`,
 } = {}) {
   // UI
   setText("outEntrega", Number.isFinite(cop) ? money("COP", cop, 0) : "—");
@@ -1426,157 +1740,139 @@ async function exportPoster() {
   document.body.classList.remove("exporting");
 
   const a = document.createElement("a");
-  a.download = `cazeexchange_tabla_${new Date().toISOString().slice(0,10)}.png`;
+  a.download = `${brandSlug()}_tabla_${new Date().toISOString().slice(0,10)}.png`;
   a.href = canvas.toDataURL("image/png");
   a.click();
 }
 
 async function updateRates() {
   const status = $("status");
-  status.textContent = "Actualizando…";
-  const rb0 = $("ratesBadge");
-  if (rb0) { rb0.textContent = "Tasas: …"; rb0.classList.remove("ok","warn"); }
+  const rb = $("ratesBadge");
+  const adj = state.adj || { ...DEFAULT_ADJ };
 
-  // Nota: para evitar CORS y tener una sola fuente, primero intentamos un endpoint propio
-  // (Cloudflare Pages Functions). Si no existe (por ejemplo en Vite dev), caemos a fetch directo.
+  if (status) status.textContent = "Actualizando…";
+  if (rb) {
+    rb.textContent = "Tasas: …";
+    rb.classList.remove("ok", "warn", "bad");
+    rb.title = "";
+  }
+
+  const applyBadge = (data) => {
+    if (!rb || !data) return;
+
+    // quality: primary | approx | missing
+    const q = data.quality
+      || (data.missing && data.missing.length ? "missing" : "primary")
+      || "approx";
+
+    const text = q === "primary" ? "Tasas: OK" : (q === "missing" ? "Tasas: faltan" : "Tasas: aprox");
+    rb.textContent = text;
+
+    rb.classList.toggle("ok", q === "primary");
+    rb.classList.toggle("warn", q === "approx");
+    rb.classList.toggle("bad", q === "missing");
+
+    // Tooltip detallado (si viene)
+    const src = data.sources_detail || data.sourcesDetail || null;
+    if (src && typeof src === "object") {
+      const lines = [];
+      lines.push(`BCV: ${src.bcv || "?"}`);
+      lines.push(`Paralelo: ${src.parallel || "?"}`);
+      lines.push(`USDT/COP: ${src.usdt_cop || "?"}`);
+      lines.push(`USDT/VES: ${src.usdt_ves || "?"}`);
+      if (Array.isArray(data.fallback_rates) && data.fallback_rates.length) {
+        lines.push(`Fallback: ${data.fallback_rates.join(", ")}`);
+      }
+      if (Array.isArray(data.missing) && data.missing.length) {
+        lines.push(`Faltan: ${data.missing.join(", ")}`);
+      }
+      if (Array.isArray(data.warnings) && data.warnings.length) {
+        lines.push(`Notas: ${data.warnings.slice(0, 3).join(" | ")}`);
+      }
+      rb.title = lines.join("\n");
+      return;
+    }
+
+    // Legacy tooltip
+    if (data.missing && data.missing.length) rb.title = `Faltan: ${data.missing.join(", ")}`;
+    else rb.title = String(data.sources || "");
+  };
+
+  // Endpoint propio (Pages Functions)
   const copNow = parseNum($("inCop")?.value);
   const ratesPath = Number.isFinite(copNow) && copNow > 0
     ? `/api/rates?cop=${encodeURIComponent(String(copNow))}`
     : "/api/rates";
   const ratesUrl = `${API_BASE}${ratesPath}`;
+
   const serverRates = await safeJson(ratesUrl);
   if (serverRates && serverRates.ok) {
-    const adj = state.adj || { ...DEFAULT_ADJ };
-    // Valores base
-    // IDs del UI (definidos en createUI): usdVesOf (BCV) y usdVesPar (Paralelo)
+    // Tasas base
     if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesOf", applyPct(serverRates.usdVesBcv, adj.bcvPct), 2);
     if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesPar", applyPct(serverRates.usdVesParallel, adj.parallelPct), 2);
-    if (Number.isFinite(serverRates.eurVesBcv)) setValue("eurVes", serverRates.eurVesBcv);
+    if (Number.isFinite(serverRates.eurVesBcv)) setValue("eurVes", serverRates.eurVesBcv, 2);
     if (Number.isFinite(serverRates.eurUsd)) setValue("eurUsd", serverRates.eurUsd, 6);
-    // “Tasas del día” para P2P
-    // - Preferimos lo que venga directo de Binance (usdtCopBuy/usdtVesSell)
-    // - Si no viene, caemos a aproximaciones (usdCop y usdVesParallel)
-    const usdtCop = applyPct((serverRates.usdtCopBuy ?? serverRates.usdCop ?? null), adj.usdtCopPct);
-    const usdtVes = applyPct((serverRates.usdtVesSell ?? serverRates.usdVesP2P ?? serverRates.usdVesParallel ?? null), adj.usdtVesPct);
-    if (Number.isFinite(usdtCop)) setValue("usdtCopBuy", usdtCop);
-    if (Number.isFinite(usdtVes)) setValue("usdtVesSell", usdtVes);
 
-    // Marca de fuente para el resumen
+    // P2P (USDT/COP y USDT/VES) con ajustes
+    const usdtCop = applyPct((serverRates.usdtCopBuy ?? serverRates.usdCop ?? null), adj.usdtCopPct);
+    const usdtVes = applyPct((serverRates.usdtVesSell ?? serverRates.usdVesParallel ?? null), adj.usdtVesPct);
+    if (Number.isFinite(usdtCop)) setValue("usdtCopBuy", usdtCop, 2);
+    if (Number.isFinite(usdtVes)) setValue("usdtVesSell", usdtVes, 2);
+
     state.lastRateMeta = {
       ok: true,
       sources: serverRates.sources || "API",
       ts: serverRates.ts || new Date().toISOString(),
+      quality: serverRates.quality || null,
     };
 
-    // UI badge: OK vs fallback
-    const rb = $("ratesBadge");
-    if (rb) {
-      const st = serverRates.status || (serverRates.warnings && serverRates.warnings.length ? "fallback" : "ok");
-      rb.textContent = st === "ok" ? "Tasas: OK" : "Tasas: fallback";
-      rb.classList.toggle("ok", st === "ok");
-      rb.classList.toggle("warn", st !== "ok");
-      if (serverRates.missing && serverRates.missing.length) {
-        rb.title = `Faltan: ${serverRates.missing.join(", ")}`;
-      } else {
-        rb.title = String(serverRates.sources || "");
-      }
-    }
-
-    status.textContent = "Listo";
-    paint();
+    applyBadge(serverRates);
+    if (status) status.textContent = "Listo";
+    recalcAll();
     return;
   }
 
-  // DolarApi VE (USD oficial / paralelo)
-  const usdOf = await safeJson("https://ve.dolarapi.com/v1/dolares/oficial");
-  const usdPar = await safeJson("https://ve.dolarapi.com/v1/dolares/paralelo");
+  // Fallback legacy (puede fallar por CORS en dev): no rompe la app.
+  try {
+    const usdOf = await safeJson("https://ve.dolarapi.com/v1/dolares/oficial");
+    const usdPar = await safeJson("https://ve.dolarapi.com/v1/dolares/paralelo");
+    const fx = await safeJson("https://open.er-api.com/v6/latest/EUR");
+    const usdFx = await safeJson("https://open.er-api.com/v6/latest/USD");
 
-  // FX (gratis, sin key)
-  const fx = await safeJson("https://open.er-api.com/v6/latest/EUR"); // EURUSD
-  const usdFx = await safeJson("https://open.er-api.com/v6/latest/USD"); // USDCOP
+    const ofVal = usdOf?.promedio ?? usdOf?.venta ?? usdOf?.compra ?? null;
+    const parVal = usdPar?.promedio ?? usdPar?.venta ?? usdPar?.compra ?? null;
+    const eurUsd = fx?.rates?.USD ?? null;
+    const usdCop = usdFx?.rates?.COP ?? null;
 
-  // BCV (EUR/VES) via tu Worker
-  const bcv = await safeJson("https://remesas-proxy.agjeronimo14.workers.dev/bcv");
+    if (ofVal) setInput("usdVesOf", applyPct(Number(ofVal), adj.bcvPct), 2);
+    if (parVal) setInput("usdVesPar", applyPct(Number(parVal), adj.parallelPct), 2);
+    if (eurUsd) setInput("eurUsd", Number(eurUsd), 6);
 
-  const ofVal = usdOf?.promedio ?? usdOf?.venta ?? usdOf?.compra ?? null;
-  const parVal = usdPar?.promedio ?? usdPar?.venta ?? usdPar?.compra ?? null;
+    // Aproximaciones para USDT
+    if (usdCop) setInput("usdtCopBuy", applyPct(Number(usdCop), adj.usdtCopPct), 2);
+    if (parVal) setInput("usdtVesSell", applyPct(Number(parVal), adj.usdtVesPct), 2);
 
-  // BCV array: buscamos EUR
-  const eurItem = Array.isArray(bcv) ? bcv.find(x => (x?.symbol || "").toUpperCase() === "EUR") : null;
-  const eurVes = eurItem?.rate ?? eurItem?.value ?? eurItem?.price ?? null;
+    applyBadge({
+      ok: true,
+      quality: "approx",
+      fallback_rates: ["usdt_cop", "usdt_ves"],
+      sources_detail: {
+        bcv: "DolarAPI (fallback)",
+        parallel: "DolarAPI (fallback)",
+        usdt_cop: "Aprox: USD/COP",
+        usdt_ves: "Aprox: USD/VES paralelo",
+      },
+    });
 
-  const eurUsd = fx?.rates?.USD ?? null;
-  const usdCop = usdFx?.rates?.COP ?? null;
-
-  if (ofVal) state.usdVesOficial = Number(ofVal);
-  if (parVal) state.usdVesParalelo = Number(parVal);
-  if (eurUsd) state.eurUsd = Number(eurUsd);
-  if (eurVes) state.eurVesBCV = Number(eurVes);
-  if (usdCop) state.usdCop = Number(usdCop);
-
-  state.updatedAt = new Date();
-
-  // pinta en inputs (pero quedan editables)
-  setInput("usdVesOf", state.usdVesOficial, 4);
-  const ok = [];
-
-  setInput("usdVesOfi", state.usdVesOficial, 4);
-  setInput("usdVesPar", state.usdVesParalelo, 4);
-  setInput("eurUsd", state.eurUsd, 6);
-  setInput("eurVes", state.eurVesBCV, 4);
-
-  // “tasas del día” aproximadas para campos manuales (USDT ~ 1 USD)
-  if (Number.isFinite(state.usdCop) && state.usdCop > 0) {
-    setInput("usdtCopBuy", state.usdCop, 2);
-    ok.push("USDT/COP (aprox)");
-  }
-  if (Number.isFinite(state.usdVesParalelo) && state.usdVesParalelo > 0) {
-    setInput("usdtVesSell", state.usdVesParalelo, 2);
-    ok.push("USDT/VES (aprox)");
-  }
-  if (state.usdVesOficial) ok.push("USD/BCV");
-  if (state.usdVesParalelo) ok.push("USD Paralelo");
-  if (state.eurUsd) ok.push("EURUSD");
-  if (state.eurVesBCV) ok.push("EUR/BCV");
-  ok.push("P2P: auto (si responde)");
-
-  status.textContent = `OK: ${ok.join(" · ")} · ${state.updatedAt.toLocaleString()} · Ajustes: BCV ${fmt(adj.bcvPct,2)}% | Par ${fmt(adj.parallelPct,2)}% | USDT/COP ${fmt(adj.usdtCopPct,2)}% | USDT/VES ${fmt(adj.usdtVesPct,2)}%`;
-
-  // recalcula todo
-  readRatesFromInputs();
-  const main = calcMain({ paint: state.quoteMode === "cop" });
-  const primaryInv = calcInverse();
-  const active = getActiveQuote(main, primaryInv);
-
-  // En modo objetivo: copiamos el COP calculado a la casilla principal (solo lectura)
-  if (state.quoteMode === "goal") {
-    setInput("inCop", active?.cop ?? null, 0);
-    if (active) {
-      setSummary({
-        cop: active.cop,
-        baseUsdt: active.baseUsdt,
-        feeUsdt: active.feeUsdt,
-        netUsdt: active.netUsdt,
-        feeCop: active.feeCop,
-        vesUsed: active.vesUsed,
-        methodLabel: active.methodLabel,
-        copPerVes: active.copPerVes,
-        waPrefix: "CazeExchange — Cotización remesa (objetivo)",
-      });
-    } else {
-      setSummaryBlank("Escribe un objetivo en la tabla inversa");
-    }
+    if (status) status.textContent = "Listo (fallback)";
+  } catch (e) {
+    if (status) status.textContent = "No se pudo actualizar automáticamente. Puedes editar tasas manual.";
+    applyBadge({ ok: true, quality: "approx", warnings: [String(e?.message || e)] });
   }
 
-  const badge = $("quoteSourceBadge");
-  if (badge) {
-    badge.textContent = state.quoteMode === "goal"
-      ? `Fuente: Objetivo (${INV_LABELS[state.invLast] || "tabla inversa"})`
-      : "Fuente: COP (monto entregado)";
-  }
-
-  renderPoster(active);
+  recalcAll();
 }
+
 
 function recalcAll() {
   readRatesFromInputs();
@@ -1605,7 +1901,7 @@ function recalcAll() {
         vesUsed: active.vesUsed,
         methodLabel: active.methodLabel,
         copPerVes: active.copPerVes,
-        waPrefix: "CazeExchange — Cotización remesa (objetivo)",
+        waPrefix: `${getBrandName()} — Cotización remesa (objetivo)`,
       });
     } else {
       setSummaryBlank("Escribe un objetivo en la tabla inversa");
@@ -1616,6 +1912,12 @@ function recalcAll() {
 }
 
 // ---------- events ----------
+
+// Compat: algunos handlers antiguos llaman updateAll()
+function updateAll() {
+  recalcAll();
+}
+
 // En algunos entornos (o si alguien cambia el HTML) estos botones pueden no existir.
 // Evitamos que la app se caiga por un null.addEventListener().
 
@@ -1624,6 +1926,16 @@ function recalcAll() {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
 }
+
+function daysLeft(expires_at) {
+  if (!expires_at) return "∞";
+  const t = Date.parse(expires_at);
+  if (!Number.isFinite(t)) return "?";
+  const diff = t - Date.now();
+  const d = Math.ceil(diff / (1000*60*60*24));
+  return d < 0 ? "Expirado" : `${d}d`;
+}
+
 
 async function loadAdminUsers() {
   if (state.user?.role !== "admin") return;
@@ -1641,6 +1953,8 @@ async function loadAdminUsers() {
         <td class="mono">${escapeHtml(u.role)}</td>
         <td class="mono">${escapeHtml(u.plan)}</td>
         <td class="mono">${escapeHtml(exp)}</td>
+        <td class="mono">${daysLeft(exp)}</td>
+
         <td class="mono">${active ? "1" : "0"}</td>
         <td>
           <button class="btn xs" data-action="reset" data-id="${u.id}">Reset</button>
@@ -1736,16 +2050,42 @@ async function adminCreateUser() {
   const password = $("adminPassword")?.value || "";
   const is_active = $("adminActive")?.value === "1";
 
+  if (!email) {
+    $("adminResult").textContent = "Falta el email.";
+    return;
+  }
+
   $("adminResult").textContent = "Creando...";
   try {
     const r = await apiFetch("/api/admin/create-user", {
       method: "POST",
       body: JSON.stringify({ email, role, plan, expires_at, password: password || undefined, is_active }),
     });
+
     const temp = r.temp_password ? ` Temp password: ${r.temp_password}` : "";
     $("adminResult").textContent = `OK: ${r.user.email}.${temp}`;
-    $("adminEmail").value = "";
-    $("adminPassword").value = "";
+
+    // Copiar mensaje listo para WhatsApp
+    if (r.temp_password) {
+      const msg = `✅ Acceso ${getBrandName()}
+Email: ${r.user.email}
+Clave: ${r.temp_password}
+Expira: ${r.user.expires_at || "Sin expiración"}
+Link: https://cazeexchange.pages.dev
+
+Escríbeme por aquí si necesitas ayuda.`;
+
+      try {
+        await navigator.clipboard.writeText(msg);
+        $("adminResult").textContent += " | Copiado ✅";
+      } catch {
+        $("adminResult").textContent += " | No se pudo copiar (clipboard bloqueado).";
+        window.prompt("Copia y pega este mensaje en WhatsApp:", msg);
+      }
+    }
+
+    if ($("adminEmail")) $("adminEmail").value = "";
+    if ($("adminPassword")) $("adminPassword").value = "";
     await loadAdminUsers();
   } catch (e) {
     $("adminResult").textContent = `Error: ${e.message || e}`;
