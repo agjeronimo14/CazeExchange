@@ -1724,25 +1724,74 @@ function renderPoster(activeQuote) {
 }
 
 async function exportPoster() {
-  const poster = $("poster");
+  const poster = $('poster');
   if (!poster) return;
 
-  const html2canvas = await getHtml2Canvas();
+  // IMPORTANT: the poster lives inside the Summary tab.
+  // If the user is on another tab (eg. Rates), the poster is hidden (display:none).
+  // html2canvas will then render a 0x0 canvas and Chrome downloads a 0B file.
+  const prevTab = document.querySelector('.tabBtn.active')?.dataset?.tab || 'quote';
+  const needSwitch = prevTab !== 'summary';
 
-  // Oculta lo marcado como no-export SOLO durante export
-  document.body.classList.add("exporting");
+  try {
+    if (needSwitch) {
+      setActiveTab('summary');
+      // Wait 2 frames so layout/styling settles before capture
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    }
+    // Ensure the poster is up-to-date before capture
+    try {
+      recalcAll();
+    } catch (e) {
+      // non-fatal
+    }
 
-  const canvas = await html2canvas(poster, {
-    backgroundColor: null,
-    scale: 2,
-  });
+    const rect = poster.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      if ($('status')) $('status').textContent = 'Export: abre la pestaña Resumen';
+      return;
+    }
 
-  document.body.classList.remove("exporting");
+    const html2canvas = await getHtml2Canvas();
+    document.body.classList.add('exporting');
 
-  const a = document.createElement("a");
-  a.download = `${brandSlug()}_tabla_${new Date().toISOString().slice(0,10)}.png`;
-  a.href = canvas.toDataURL("image/png");
-  a.click();
+    let canvas;
+    try {
+      canvas = await html2canvas(poster, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+      });
+    } finally {
+      document.body.classList.remove('exporting');
+    }
+
+    const filename = `${brandSlug()}_tabla_${new Date().toISOString().slice(0, 10)}.png`;
+
+    // Prefer Blob download (more reliable than huge data URLs)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const a = document.createElement('a');
+    a.download = filename;
+
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return;
+    }
+
+    // Fallback
+    const dataUrl = canvas.toDataURL('image/png');
+    if (!dataUrl || dataUrl === 'data:,' || dataUrl.length < 50) {
+      if ($('status')) $('status').textContent = 'Export: fallo (canvas vacio)';
+      return;
+    }
+    a.href = dataUrl;
+    a.click();
+  } finally {
+    if (needSwitch) setActiveTab(prevTab);
+  }
 }
 
 async function updateRates() {
