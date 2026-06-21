@@ -158,12 +158,12 @@ function hydrateBrandingUI() {
   if (pickEl) pickEl.value = b.accent;
 
   const saveBtn = document.getElementById("btnBrandSave");
-  if (saveBtn) saveBtn.disabled = !!state.demo || !state.user;
+  if (saveBtn) saveBtn.disabled = !state.user;
 
   const msgEl = document.getElementById("brandMsg");
   if (msgEl) {
-    msgEl.textContent = state.demo || !state.user
-      ? "Modo demo: puedes previsualizar pero necesitas iniciar sesión para guardar."
+    msgEl.textContent = !state.user
+      ? "Inicia sesión para poder guardar las configuraciones de marca."
       : "";
   }
 }
@@ -179,9 +179,9 @@ function readBrandingFromUI() {
 async function saveBrandingToServer() {
   const msgEl = document.getElementById("brandMsg");
 
-  if (state.demo || !state.user) {
-    if (msgEl) msgEl.textContent = "Inicia sesión para guardar tu branding.";
-    openAuthModal("Inicia sesión para guardar tu branding");
+  if (!state.user) {
+    if (msgEl) msgEl.textContent = "Inicia sesión para guardar tu marca.";
+    openAuthModal("Inicia sesión para guardar tu marca");
     return;
   }
 
@@ -259,7 +259,7 @@ function setUserBadge() {
   const el = $("userBadge");
   if (!el) return;
   if (!state.user) {
-    el.textContent = "Modo: demo (sin login)";
+    el.textContent = "Sin sesión activa";
     applyRoleGates();
     return;
   }
@@ -269,7 +269,7 @@ function setUserBadge() {
 }
 
 function isLimitedUser() {
-  if (state.demo || !state.user) return true;
+  if (!state.user) return true;
   return ["trial", "viewer"].includes(state.user.role);
 }
 
@@ -277,20 +277,19 @@ function applyRoleGates() {
   const limited = isLimitedUser();
   if ($("btnExport")) $("btnExport").disabled = limited;
 
-  // Branding: se puede previsualizar en demo, pero solo se guarda con sesión
-  const canSaveBranding = !state.demo && !!state.user;
+  const canSaveBranding = !!state.user;
   if ($("btnBrandSave")) $("btnBrandSave").disabled = !canSaveBranding;
 
-  const msg = limited ? "Funciones limitadas (demo/trial). Para Pro, pide activación por WhatsApp." : "";
+  const msg = limited ? "Funciones limitadas. Para activar tu cuenta Pro, contacta a soporte corporativo." : "";
   // show in status badge title
   if ($("status")) $("status").title = msg;
 
   const bmsg = $("brandMsg");
   if (bmsg) {
     if (!canSaveBranding && !bmsg.textContent) {
-      bmsg.textContent = "Modo demo: puedes previsualizar el branding, pero debes iniciar sesión para guardarlo.";
+      bmsg.textContent = "Debes iniciar sesión para poder guardar marcas e información.";
     }
-    if (canSaveBranding && bmsg.textContent.startsWith("Modo demo")) bmsg.textContent = "";
+    if (canSaveBranding && bmsg.textContent.startsWith("Debes iniciar")) bmsg.textContent = "";
   }
 }
 
@@ -348,7 +347,8 @@ function applyPhase2Layout() {
     nav.className = 'tabsBottom no-export';
     nav.setAttribute('aria-label', 'Navegación móvil');
     nav.innerHTML = `
-      <button class="tabBtn" data-tab="quote" type="button">Cotizar</button>
+      <button class="tabBtn" data-tab="quote" type="button">COP ➔ VES</button>
+      <button class="tabBtn" data-tab="vesToCop" type="button">VES ➔ COP</button>
       <button class="tabBtn" data-tab="rates" type="button">Tasas</button>
       <button class="tabBtn" data-tab="summary" type="button">Resumen</button>
       <button class="tabBtn" data-tab="whatsapp" type="button">WhatsApp</button>
@@ -487,7 +487,7 @@ function saveAdj(adj) {
 
 let _saveSettingsTimer = null;
 function scheduleSaveSettings(adj) {
-  if (state.demo || !state.user) return;
+  if (!state.user) return;
   if (_saveSettingsTimer) clearTimeout(_saveSettingsTimer);
   _saveSettingsTimer = setTimeout(async () => {
     try {
@@ -657,7 +657,7 @@ async function getHtml2Canvas() {
 // ---------- state ----------
 const state = {
   user: null,
-  demo: true,
+  demo: false,
   adj: loadAdj(),
   branding: loadBrandingLocal(),
   // tasas auto
@@ -691,7 +691,7 @@ mount.innerHTML = `
           <span class="badge mono" id="brandBadge">CAZEEXCHANGE</span>
           <span id="ratesBadge" class="badge mono">Tasas: —</span>
         </div>
-        <small id="userBadge" class="badge">Modo: demo (sin login)</small>
+        <small id="userBadge" class="badge">Sin sesión activa</small>
       </div>
       <div class="actions">
         <button id="btnUpdate" class="btn primary">Actualizar tasas</button>
@@ -702,7 +702,8 @@ mount.innerHTML = `
     </div>
 
     <div class="tabsTop" role="tablist" aria-label="Navegación">
-      <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">Cotizar</button>
+      <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">De COP a VES</button>
+      <button class="tabBtn" data-tab="vesToCop" id="tabVesToCop" type="button">De VES a COP</button>
       <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas</button>
       <button class="tabBtn" data-tab="summary" id="tabSummary" type="button">Resumen</button>
       <button class="tabBtn" data-tab="whatsapp" id="tabWhatsApp" type="button">WhatsApp</button>
@@ -836,7 +837,7 @@ mount.innerHTML = `
 
         <section class="pane" data-tabs="rates">
           <h2>Branding (tu marca)</h2>
-          <p class="hint">Personaliza el nombre y los colores que salen en la imagen exportada. En <b>demo</b> puedes previsualizar, pero para guardar debes iniciar sesión.</p>
+          <p class="hint">Personaliza el nombre y los colores que salen en la imagen exportada para que coincida con tu identidad de negocio.</p>
 
           <div class="row">
             <div class="field">
@@ -931,6 +932,53 @@ mount.innerHTML = `
         </div>
 
       
+        </section>
+
+        <section class="pane" data-tabs="vesToCop">
+          <h2>Entradas (Remesa de VES a COP)</h2>
+          <p class="hint">Calcula cuántos COP (pesos colombianos) recibe el beneficiario en base a la cantidad de VES (bolívares) que te entrega el cliente.</p>
+
+          <div class="row">
+            <div class="field">
+              <label>Monto que te entrega (VES)</label>
+              <input id="inVes" inputmode="decimal" placeholder="Ej: 50000" />
+            </div>
+
+            <div class="field">
+              <label>Tipo de tasa de cambio (VES → USD)</label>
+              <select id="vesUsdRateType">
+                <option value="usdtVesSell">Binance USDT/VES (Vender)</option>
+                <option value="usdVesPar" selected>Dólar Paralelo (Recomendado)</option>
+                <option value="usdVesOf">Dólar Oficial (BCV)</option>
+                <option value="eurVes">Euro BCV / EURUSD</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>Tasa USDT/COP (Comprar en CO)</label>
+              <input id="vesUsdtCopBuy" inputmode="decimal" placeholder="Ej: 3950" />
+            </div>
+
+            <div class="field">
+              <label>Tipo de ganancia</label>
+              <select id="vesFeeType">
+                <option value="pct">Porcentaje (%) sobre USDT</option>
+                <option value="fixed">Fijo (USDT)</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Ganancia %</label>
+              <input id="vesFeePct" inputmode="decimal" value="10" />
+            </div>
+
+            <div class="field">
+              <label>Ganancia fija (USDT)</label>
+              <input id="vesFeeFixed" inputmode="decimal" value="0" />
+            </div>
+          </div>
         </section>
 
         <section class="pane adminOnly" data-tabs="admin">
@@ -1083,6 +1131,54 @@ mount.innerHTML = `
         
         </section>
 
+        <section class="pane" data-tabs="vesToCop">
+          <h2>Resumen de envío a Colombia (VES → COP)</h2>
+          <div class="badge mono" style="margin:-4px 0 10px 0">Sentido: Venezuela → Colombia</div>
+
+          <div class="kpi">
+            <div class="cap">Tasa inversa (COP por 1 VES)</div>
+            <div id="kpiVesCopRate" class="big">—</div>
+            <div class="cap mono" id="kpiVesCopNote">COP que recibe por cada 1 Bolívar entregado</div>
+          </div>
+
+          <div style="height:10px"></div>
+
+          <div class="kpi">
+            <div class="cap">Entrega en Venezuela (cliente)</div>
+            <div id="outVesEntrega" class="big">—</div>
+            <div class="cap">Recibe en Colombia (beneficiario)</div>
+            <div id="outVesRecibe" class="big">—</div>
+          </div>
+
+          <hr/>
+
+          <div class="row">
+            <div class="kpi">
+              <div class="cap">Base en USD (USDT comprado)</div>
+              <div id="outVesBaseUsdt" class="big">—</div>
+              <div class="cap">Ganancia (USDT)</div>
+              <div id="outVesFeeUsdt" class="big">—</div>
+            </div>
+
+            <div class="kpi">
+              <div class="cap">USDT neto a enviar</div>
+              <div id="outVesNetUsdt" class="big">—</div>
+              <div class="cap">Ganancia estimada (COP)</div>
+              <div id="outVesFeeCop" class="big">—</div>
+            </div>
+          </div>
+
+          <hr/>
+
+          <h2>Mensaje WhatsApp (copiar/pegar)</h2>
+          <textarea id="vesWa" readonly style="min-height:160px;"></textarea>
+          <div class="waActions no-export" style="display:flex; gap:10px; align-items:center; margin-top:8px">
+            <button id="btnCopyVesWA" class="btn" type="button">Copiar</button>
+            <button id="btnOpenVesWA" class="btn primary" type="button">Abrir WhatsApp</button>
+            <span id="vesWaMsg" class="hint" style="margin-left:auto"></span>
+          </div>
+        </section>
+
         <section class="pane" data-tabs="summary">
           <div class="posterHeader">
           <div>
@@ -1139,7 +1235,7 @@ mount.innerHTML = `
         <h2 style="margin:0">Iniciar sesión</h2>
         <span class="badge mono" id="authBrandBadge">CazeExchange</span>
       </div>
-      <p class="hint">Si no tienes usuario aún, puedes usar el modo demo. Para Pro, te activan por WhatsApp.</p>
+      <p class="hint">Inicia sesión con tus credenciales de CazeExchange corporativas para usar el sistema.</p>
 
       <div class="field">
         <label>Email</label>
@@ -1152,7 +1248,6 @@ mount.innerHTML = `
 
       <div class="row">
         <button id="btnLogin" class="btn primary" type="button">Entrar</button>
-        <button id="btnDemo" class="btn" type="button">Usar demo</button>
       </div>
 
       <div id="loginMsg" class="hint" style="margin-top:10px"></div>
@@ -1172,20 +1267,6 @@ applyBrandingToUI(state.branding);
 wireBrandingUI();
 hydrateBrandingUI();
 
-// demo & login
-$("btnDemo")?.addEventListener("click", () => {
-  state.demo = true;
-  state.user = null;
-  state.branding = loadBrandingLocal();
-  applyBrandingToUI(state.branding);
-  hydrateBrandingUI();
-  setUserBadge();
-  $("btnLogout").style.display = "none";
-  closeAuthModal();
-  // demo: keep local adjustments
-  hydrateAdjUI();
-  updateAll();
-});
 
 $("btnLogin")?.addEventListener("click", async () => {
   const email = $("loginEmail")?.value?.trim();
@@ -1225,7 +1306,7 @@ $("btnLogin")?.addEventListener("click", async () => {
 $("btnLogout")?.addEventListener("click", async () => {
   try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
   state.user = null;
-  state.demo = true;
+  state.demo = false;
   state.branding = loadBrandingLocal();
   applyBrandingToUI(state.branding);
   hydrateBrandingUI();
@@ -1265,9 +1346,9 @@ async function bootstrapAuth() {
 
     closeAuthModal();
   } catch {
-    // no session: start in demo + show modal
+    // no session: start block and show modal
     state.user = null;
-    state.demo = true;
+    state.demo = false;
     state.branding = loadBrandingLocal();
     applyBrandingToUI(state.branding);
     hydrateBrandingUI();
@@ -1510,7 +1591,10 @@ function inverseCopForTargetVes(targetVes, rateVesPerUsdt, usdtCopBuy, feeType, 
   return { cop, usd, ves: targetVes };
 }
 
-function calcInverse() {
+function calcInverse(mainQuote) {
+  const forwardCop = mainQuote?.cop;
+  const forwardVes = mainQuote?.vesUsed;
+
   const usdtCopBuy = parseNum($("usdtCopBuy").value);
   const usdtVesSell = parseNum($("usdtVesSell").value);
 
@@ -1540,14 +1624,19 @@ function calcInverse() {
 
 
   // Si quieres “VES directo”, usamos preferencia EUR BCV si existe; si no, Binance (USDT/VES)
-  const invVes = parseNum($("invVes").value);
+  const invVesVal = parseNum($("invVes").value);
+  const invVesInput = $("invVes");
+  if (invVesInput) {
+    invVesInput.placeholder = forwardVes ? fmt(forwardVes, 2) : "Ej: 30000";
+  }
+  const invVes = (invVesVal === 0 || invVesVal) ? invVesVal : (forwardVes || null);
   const rateForVes = usdViaEur || usdtVesSell || null;
   const r0 = inverseCopForTargetVes(invVes, rateForVes, usdtCopBuy, feeType, feePct, feeFixed);
   setText("invVesEq", invVes ? `VES ${fmt(invVes, 2)}` : "—");
   setText("invVesCop", r0 ? money("COP", r0.cop, 0) : "—");
   setText("invVesUsd", r0 ? money("USD", r0.usd, 2) : "—");
 
-  if (invVes && r0) {
+  if (invVesVal && r0) {
     const baseUsdt = r0.cop / usdtCopBuy;
     const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
     const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
@@ -1565,14 +1654,20 @@ function calcInverse() {
   }
 
   // USD equiv (BCV)
-  const invUsdBcv = parseNum($("invUsdBcv").value);
+  const invUsdBcvVal = parseNum($("invUsdBcv").value);
+  const invUsdBcvInput = $("invUsdBcv");
+  const fallbackUsdBcv = (forwardVes && usdBcv) ? (forwardVes / usdBcv) : null;
+  if (invUsdBcvInput) {
+    invUsdBcvInput.placeholder = fallbackUsdBcv ? fmt(fallbackUsdBcv, 2) : "Ej: 50";
+  }
+  const invUsdBcv = (invUsdBcvVal === 0 || invUsdBcvVal) ? invUsdBcvVal : (fallbackUsdBcv || null);
   const targetVesBcv = (invUsdBcv && usdBcv) ? invUsdBcv * usdBcv : null;
   const r1 = inverseCopForTargetVes(targetVesBcv, usdViaEur || usdtVesSell || null, usdtCopBuy, feeType, feePct, feeFixed);
   setText("invUsdBcvEq", targetVesBcv ? `VES ${fmt(targetVesBcv, 2)}` : "—");
   setText("invUsdBcvCop", r1 ? money("COP", r1.cop, 0) : "—");
   setText("invUsdBcvUsd", r1 ? money("USD", r1.usd, 2) : "—");
 
-  if (!primary.cop && invUsdBcv && targetVesBcv && r1) {
+  if (!primary.cop && invUsdBcvVal && targetVesBcv && r1) {
     const baseUsdt = r1.cop / usdtCopBuy;
     const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
     const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
@@ -1590,14 +1685,20 @@ function calcInverse() {
   }
 
   // USD equiv (Paralelo)
-  const invUsdPar = parseNum($("invUsdPar").value);
+  const invUsdParVal = parseNum($("invUsdPar").value);
+  const invUsdParInput = $("invUsdPar");
+  const fallbackUsdPar = (forwardVes && usdPar) ? (forwardVes / usdPar) : null;
+  if (invUsdParInput) {
+    invUsdParInput.placeholder = fallbackUsdPar ? fmt(fallbackUsdPar, 2) : "Ej: 50";
+  }
+  const invUsdPar = (invUsdParVal === 0 || invUsdParVal) ? invUsdParVal : (fallbackUsdPar || null);
   const targetVesPar = (invUsdPar && usdPar) ? invUsdPar * usdPar : null;
   const r2 = inverseCopForTargetVes(targetVesPar, usdtVesSell || usdViaEur || null, usdtCopBuy, feeType, feePct, feeFixed);
   setText("invUsdParEq", targetVesPar ? `VES ${fmt(targetVesPar, 2)}` : "—");
   setText("invUsdParCop", r2 ? money("COP", r2.cop, 0) : "—");
   setText("invUsdParUsd", r2 ? money("USD", r2.usd, 2) : "—");
 
-  if (!primary.cop && invUsdPar && targetVesPar && r2) {
+  if (!primary.cop && invUsdParVal && targetVesPar && r2) {
     const baseUsdt = r2.cop / usdtCopBuy;
     const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
     const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
@@ -1615,14 +1716,20 @@ function calcInverse() {
   }
 
   // USD equiv (EUR BCV)
-  const invUsdEur = parseNum($("invUsdEur").value);
+  const invUsdEurVal = parseNum($("invUsdEur").value);
+  const invUsdEurInput = $("invUsdEur");
+  const fallbackUsdEur = (forwardVes && usdViaEur) ? (forwardVes / usdViaEur) : null;
+  if (invUsdEurInput) {
+    invUsdEurInput.placeholder = fallbackUsdEur ? fmt(fallbackUsdEur, 2) : "Ej: 50";
+  }
+  const invUsdEur = (invUsdEurVal === 0 || invUsdEurVal) ? invUsdEurVal : (fallbackUsdEur || null);
   const targetVesEur = (invUsdEur && usdViaEur) ? invUsdEur * usdViaEur : null;
   const r3 = inverseCopForTargetVes(targetVesEur, usdViaEur || null, usdtCopBuy, feeType, feePct, feeFixed);
   setText("invUsdEurEq", targetVesEur ? `VES ${fmt(targetVesEur, 2)}` : "—");
   setText("invUsdEurCop", r3 ? money("COP", r3.cop, 0) : "—");
   setText("invUsdEurUsd", r3 ? money("USD", r3.usd, 2) : "—");
 
-  if (!primary.cop && invUsdEur && targetVesEur && r3) {
+  if (!primary.cop && invUsdEurVal && targetVesEur && r3) {
     const baseUsdt = r3.cop / usdtCopBuy;
     const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
     const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
@@ -1640,14 +1747,20 @@ function calcInverse() {
   }
 
   // EUR (BCV)
-  const invEur = parseNum($("invEur").value);
+  const invEurVal = parseNum($("invEur").value);
+  const invEurInput = $("invEur");
+  const fallbackEur = (forwardVes && eurVes) ? (forwardVes / eurVes) : null;
+  if (invEurInput) {
+    invEurInput.placeholder = fallbackEur ? fmt(fallbackEur, 2) : "Ej: 50";
+  }
+  const invEur = (invEurVal === 0 || invEurVal) ? invEurVal : (fallbackEur || null);
   const targetVesEurOnly = (invEur && eurVes) ? invEur * eurVes : null;
   const r4 = inverseCopForTargetVes(targetVesEurOnly, usdViaEur || usdtVesSell || null, usdtCopBuy, feeType, feePct, feeFixed);
   setText("invEurEq", targetVesEurOnly ? `VES ${fmt(targetVesEurOnly, 2)}` : "—");
   setText("invEurCop", r4 ? money("COP", r4.cop, 0) : "—");
   setText("invEurUsd", r4 ? money("USD", r4.usd, 2) : "—");
 
-  if (!primary.cop && invEur && targetVesEurOnly && r4) {
+  if (!primary.cop && invEurVal && targetVesEurOnly && r4) {
     const baseUsdt = r4.cop / usdtCopBuy;
     const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
     const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
@@ -1671,6 +1784,140 @@ function calcInverse() {
   }
 
   return primary;
+}
+
+function setVesToCopBlank() {
+  setText("outVesEntrega", "—");
+  setText("outVesRecibe", "—");
+  setText("outVesBaseUsdt", "—");
+  setText("outVesFeeUsdt", "—");
+  setText("outVesNetUsdt", "—");
+  setText("outVesFeeCop", "—");
+  setText("kpiVesCopRate", "—");
+  setText("kpiVesCopNote", "Completa datos para calcular");
+  const waEl = $("vesWa");
+  if (waEl) waEl.value = "";
+}
+
+function calcVesToCop() {
+  const v = parseNum($("inVes")?.value);
+  const rateType = $("vesUsdRateType")?.value;
+  
+  const defaultUsdtCopBuy = parseNum($("usdtCopBuy")?.value);
+  const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
+  const vesUsdtCopBuyInput = $("vesUsdtCopBuy");
+  if (vesUsdtCopBuyInput && defaultUsdtCopBuy) {
+    vesUsdtCopBuyInput.placeholder = String(defaultUsdtCopBuy);
+  }
+  const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopBuy || null;
+
+  const vesFeeType = $("vesFeeType")?.value;
+  const vesFeePct = parseNum($("vesFeePct")?.value) / 100;
+  const vesFeeFixed = parseNum($("vesFeeFixed")?.value);
+
+  const usdBcv = parseNum($("usdVesOf")?.value);
+  const usdPar = parseNum($("usdVesPar")?.value);
+  const eurVes = parseNum($("eurVes")?.value);
+  const eurUsd = parseNum($("eurUsd")?.value);
+  const usdViaEur = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
+  const usdtVesSell = parseNum($("usdtVesSell")?.value);
+
+  // Determinar la tasa VES -> USD según la selección
+  let rateVesPerUsd = null;
+  let methodLabel = "—";
+  if (rateType === "usdtVesSell") {
+    rateVesPerUsd = usdtVesSell;
+    methodLabel = "Binance USDT/VES";
+  } else if (rateType === "usdVesPar") {
+    rateVesPerUsd = usdPar;
+    methodLabel = "Paralelo";
+  } else if (rateType === "usdVesOf") {
+    rateVesPerUsd = usdBcv;
+    methodLabel = "Oficial BCV";
+  } else if (rateType === "eurVes") {
+    rateVesPerUsd = usdViaEur;
+    methodLabel = "Euro BCV / EURUSD";
+  }
+
+  if (!v || !rateVesPerUsd || !vesUsdtCopBuy) {
+    setVesToCopBlank();
+    return;
+  }
+
+  // 1) Convierte los Bolívares que entrega el cliente a base USD (compramos USDT con VES)
+  const baseUsdt = v / rateVesPerUsd;
+
+  // 2) Cobras ganancia en USD/USDT
+  const feeUsdt = vesFeeType === "pct" ? (baseUsdt * vesFeePct) : vesFeeFixed;
+  const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+
+  // 3) Convierte los USD/USDT netos a COP (se entregan en Colombia)
+  const copReceived = netUsdt * vesUsdtCopBuy;
+
+  // 4) Tasa equivalente COP por 1 VES
+  const copPerVes = copReceived / v;
+  const feeCop = feeUsdt * vesUsdtCopBuy;
+
+  // Pintar en el resumen de VES a COP
+  setText("outVesEntrega", money("VES", v, 2));
+  setText("outVesRecibe", money("COP", copReceived, 0));
+  setText("outVesBaseUsdt", money("USDT", baseUsdt, 2));
+  setText("outVesFeeUsdt", money("USDT", feeUsdt, 2));
+  setText("outVesNetUsdt", money("USDT", netUsdt, 2));
+  setText("outVesFeeCop", money("COP", feeCop, 0));
+
+  if (copPerVes > 0) {
+    setText("kpiVesCopRate", `COP ${fmt(copPerVes, 6)}`);
+    setText("kpiVesCopNote", `COP por 1 VES (usando ${methodLabel})`);
+  } else {
+    setText("kpiVesCopRate", "—");
+    setText("kpiVesCopNote", "Faltan tasas para calcular");
+  }
+
+  // Generar WhatsApp text
+  const lines = [
+    `*${getBrandName()}* — Cotización remesa (Venezuela ➔ Colombia)`,
+    `══════════════════════`,
+    `➔ *Entrega (Venezuela):* ${fmt(v, 2)} VES`,
+    `➔ *Recibe (Colombia):* ${fmt(copReceived, 0)} COP`,
+    `Tasa equivalente: 1 VES = ${fmt(copPerVes, 6)} COP`,
+    `Tasa de referencia VES/USDT: ${fmt(rateVesPerUsd, 2)}`,
+    `Tasa de referencia USDT/COP: ${fmt(vesUsdtCopBuy, 2)}`,
+    `══════════════════════`,
+    `Cotización generada automáticamente.`
+  ];
+  const msg = lines.join("\n");
+  const waEl = $("vesWa");
+  if (waEl) waEl.value = msg;
+}
+
+function wireVesWhatsappActions() {
+  const btnCopy = document.getElementById('btnCopyVesWA');
+  const btnOpen = document.getElementById('btnOpenVesWA');
+  const wa = document.getElementById('vesWa');
+  const msg = document.getElementById('vesWaMsg');
+
+  if (btnCopy && wa) {
+    btnCopy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(wa.value);
+        if (msg) {
+          msg.textContent = "¡Copiado!";
+          msg.style.color = "var(--ok)";
+          setTimeout(() => { msg.textContent = ""; }, 2500);
+        }
+      } catch {
+        window.prompt("Copia y pega este mensaje:", wa.value);
+      }
+    });
+  }
+
+  if (btnOpen && wa) {
+    btnOpen.addEventListener('click', () => {
+      const txt = encodeURIComponent(wa.value);
+      window.open(`https://api.whatsapp.com/send?text=${txt}`, '_blank');
+    });
+  }
 }
 
 function renderPoster(activeQuote) {
@@ -1927,8 +2174,10 @@ function recalcAll() {
   readRatesFromInputs();
 
   const main = calcMain({ paint: state.quoteMode === "cop" });
-  const primaryInv = calcInverse();
+  const primaryInv = calcInverse(main);
   const active = getActiveQuote(main, primaryInv);
+
+  calcVesToCop();
 
   const badge = $("quoteSourceBadge");
   if (badge) {
@@ -2178,7 +2427,8 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
   "inCop","feeType","feePct","feeFixed",
   "usdVesOf","usdVesPar","eurVes","eurUsd",
   "usdtCopBuy","usdtVesSell","adjBcv","adjPar","adjUsdtCop","adjUsdtVes",
-  "invVes","invUsdBcv","invUsdPar","invUsdEur","invEur"
+  "invVes","invUsdBcv","invUsdPar","invUsdEur","invEur",
+  "inVes","vesUsdRateType","vesUsdtCopBuy","vesFeeType","vesFeePct","vesFeeFixed"
 ].forEach(id => {
   const n = $(id);
   if (!n) return;
@@ -2192,6 +2442,7 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 
 // auto al abrir
 applyQuoteModeUI();
+wireVesWhatsappActions();
 // Primero intentamos sesión (si existe) y luego cargamos tasas
 bootstrapAuth().finally(() => {
   hydrateAdjUI();

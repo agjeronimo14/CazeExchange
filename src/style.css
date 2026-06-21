@@ -557,3 +557,10 @@ input.readonly{
   /* leave space so content isn't hidden behind bottom tabs */
   .container{ padding-bottom: 96px; }
 }
+
+@media (max-width: 480px) {
+  .tabsBottom .tabBtn {
+    padding: 8px 4px;
+    font-size: 10px;
+  }
+}
