@@ -1,0 +1,6 @@
+{
+  "name": "CazeExchange",
+  "description": "Plataforma de remesas COP a VES usando USDT con cotización en tiempo real y módulo de administración",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
