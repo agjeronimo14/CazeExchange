@@ -1526,14 +1526,6 @@ mount.innerHTML = `
             <span style="font-size: 12px; color: var(--muted);">Recibe (Monto Out)</span>
             <span id="receiptOutputAmt" style="font-size: 18px; font-weight: 800; color: var(--accent);">—</span>
           </div>
-
-          <div style="border-top: 1px dashed rgba(255,255,255,0.08); margin: 6px 0;"></div>
-
-          <!-- Rates -->
-          <div style="display: flex; justify-content: space-between; align-items: baseline;">
-            <span style="font-size: 11px; color: var(--muted); text-transform: uppercase;">Tasas de Cambio</span>
-            <span id="receiptRates" class="mono" style="font-size: 10px; color: var(--muted); text-align: right; line-height: 1.3;">—</span>
-          </div>
         </div>
 
         <!-- Decorative Barcode or Brand Seal -->
@@ -1602,6 +1594,11 @@ $("btnLogin")?.addEventListener("click", async () => {
     state.demo = false;
     applyServerSettingsToState(me.settings);
 
+    // Limpiar caché local para evitar fugas entre cuentas de usuario
+    try {
+      localStorage.removeItem("CAZE_USER_OPERATIONS");
+    } catch {}
+
     // branding del usuario (server)
     if (me.branding) {
       state.branding = normalizeBranding(me.branding);
@@ -1630,6 +1627,7 @@ $("btnLogin")?.addEventListener("click", async () => {
     if (isAdmin) loadAdminUsers().catch(() => {});
     closeAuthModal();
     updateAll();
+    renderMyRecordsUI();
   } catch (e) {
     $("loginMsg").textContent = `Error: ${e.message || e}`;
   }
@@ -1639,6 +1637,9 @@ $("btnLogout")?.addEventListener("click", async () => {
   try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
   state.user = null;
   state.demo = false;
+  try {
+    localStorage.removeItem("CAZE_USER_OPERATIONS");
+  } catch {}
   state.branding = loadBrandingLocal();
   applyBrandingToUI(state.branding);
   hydrateBrandingUI();
@@ -1650,6 +1651,7 @@ $("btnLogout")?.addEventListener("click", async () => {
   if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
   openAuthModal("Sesión cerrada.");
   updateAll();
+  renderMyRecordsUI();
 });
 
 function checkUrlBranding() {
@@ -1718,6 +1720,9 @@ async function bootstrapAuth() {
     // no session: start block and show modal
     state.user = null;
     state.demo = false;
+    try {
+      localStorage.removeItem("CAZE_USER_OPERATIONS");
+    } catch {}
     
     state.branding = loadBrandingLocal();
     applyBrandingToUI(state.branding);
@@ -1731,6 +1736,7 @@ async function bootstrapAuth() {
     if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
     
     openAuthModal("");
+    renderMyRecordsUI();
   }
 }
 
@@ -3499,8 +3505,7 @@ function showReceiptModal(entry) {
                    `*Fecha:* ${formattedDate}\n` +
                    `*Operación:* ${entry.directionLabel}\n` +
                    `*Monto Entregado:* ${inputVal}\n` +
-                   `*Monto Recibido:* ${outputVal}\n` +
-                   `*Tasas:* ${entry.rates}\n\n` +
+                   `*Monto Recibido:* ${outputVal}\n\n` +
                    `¡Gracias por confiar en nosotros! ✨`;
 
       const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
@@ -3528,8 +3533,11 @@ function showReceiptModal(entry) {
 // ---------- NUEVAS FUNCIONES DE 'MIS REGISTROS' (CAJA DIARIA DEL SUSCRIPTOR) ----------
 
 function loadMyRecords() {
-  if (state.branding && Array.isArray(state.branding.operations)) {
-    return state.branding.operations;
+  if (state.user) {
+    if (state.branding && Array.isArray(state.branding.operations)) {
+      return state.branding.operations;
+    }
+    return [];
   }
   try {
     const raw = localStorage.getItem("CAZE_USER_OPERATIONS");
@@ -3539,7 +3547,7 @@ function loadMyRecords() {
   }
 }
 
-function saveMyRecords(records) {
+async function saveMyRecords(records) {
   try {
     localStorage.setItem("CAZE_USER_OPERATIONS", JSON.stringify(records));
   } catch {}
@@ -3549,6 +3557,16 @@ function saveMyRecords(records) {
     }
     state.branding.operations = records;
     saveBrandingLocal(state.branding);
+
+    // Sincronizar con el servidor en tiempo real para que aparezca en la auditoría global
+    try {
+      await apiFetch("/api/branding", {
+        method: "POST",
+        body: JSON.stringify(state.branding),
+      });
+    } catch (e) {
+      console.warn("No se pudo sincronizar operaciones con el servidor:", e);
+    }
   }
 }
 
@@ -3563,9 +3581,6 @@ function addMyRecordEntry(entry) {
   records.unshift(entry);
   saveMyRecords(records);
   renderMyRecordsUI();
-
-  // Show Receipt/Invoice Modal
-  showReceiptModal(entry);
 }
 
 function deleteMyRecord(id) {
@@ -3577,7 +3592,16 @@ function deleteMyRecord(id) {
   }
 }
 
+function viewMyRecordReceipt(id) {
+  const records = loadMyRecords();
+  const entry = records.find(r => r.id === id);
+  if (entry) {
+    showReceiptModal(entry);
+  }
+}
+
 window.deleteMyRecord = deleteMyRecord;
+window.viewMyRecordReceipt = viewMyRecordReceipt;
 
 function clearMyRecords() {
   if (confirm("¿Estás seguro de que deseas limpiar todas las operaciones guardadas hoy en tu caja? Esta acción no afectará la auditoría del administrador.")) {
@@ -3646,7 +3670,10 @@ function renderMyRecordsUI() {
         <div class="audit-card-header" style="align-items:center;">
           <span class="audit-tag ${tagClass}">${item.directionLabel}</span>
           <span class="mono" style="font-size:11px; color:var(--muted);">${formattedDate}</span>
-          <button class="btn xs" onclick="deleteMyRecord('${item.id}')" style="padding: 2px 8px; font-size:11px; margin-left:auto; border-radius:6px; background:rgba(255,90,106,0.1); color:var(--bad); border:none; cursor:pointer;">Eliminar</button>
+          <div style="margin-left:auto; display:flex; gap:6px;">
+            <button class="btn xs" onclick="viewMyRecordReceipt('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(78,161,255,0.12); color:var(--accent); border:none; cursor:pointer; font-weight:600;">🧾 Recibo</button>
+            <button class="btn xs" onclick="deleteMyRecord('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(255,90,106,0.1); color:var(--bad); border:none; cursor:pointer;">Eliminar</button>
+          </div>
         </div>
         <div class="audit-card-body" style="grid-template-columns: repeat(3, 1fr); margin-top:8px;">
           <div>
