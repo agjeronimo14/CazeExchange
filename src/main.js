@@ -1480,6 +1480,101 @@ mount.innerHTML = `
       <div id="loginMsg" class="hint" style="margin-top:10px"></div>
     </div>
   </div>
+
+  <!-- Receipt Modal -->
+  <div id="receiptModal" class="modal hidden" aria-hidden="true" style="overflow-y: auto;">
+    <div class="modalCard" style="max-width: 420px; padding: 20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3 style="margin:0; font-size:16px;">🧾 Recibo de Transacción</h3>
+        <button id="btnReceiptCloseTop" class="btn xs" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:var(--muted);">&times;</button>
+      </div>
+
+      <!-- The Receipt Ticket to be exported as Image -->
+      <div id="receiptTicket" style="background: var(--card-bg); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 4px 20px rgba(0,0,0,0.15); margin-bottom: 20px; font-family: sans-serif; position: relative; overflow: hidden;">
+        
+        <!-- Watermark / Decorative background grid -->
+        <div style="position:absolute; top:-20px; right:-20px; font-size:120px; opacity:0.02; pointer-events:none; transform: rotate(-15deg);">💱</div>
+
+        <!-- Header -->
+        <div style="text-align: center; border-bottom: 1px dashed rgba(255,255,255,0.12); padding-bottom: 15px; margin-bottom: 15px;">
+          <div id="receiptBrandName" style="font-weight: 800; font-size: 20px; letter-spacing: 0.5px; color: var(--accent); margin-bottom: 4px;">CazeExchange</div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px;">Voucher Digital de Remesas</div>
+          <div id="receiptTxId" class="mono" style="font-size: 12px; background: rgba(255,255,255,0.03); display: inline-block; padding: 2px 8px; border-radius: 4px; margin-top: 8px; color: var(--text);">REG-XXXXXX</div>
+        </div>
+
+        <!-- Details -->
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span style="font-size: 11px; color: var(--muted); text-transform: uppercase;">Fecha</span>
+            <span id="receiptDate" class="mono" style="font-size: 12px; font-weight: 600; color: var(--text);">—</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span style="font-size: 11px; color: var(--muted); text-transform: uppercase;">Operación</span>
+            <span id="receiptDirection" class="badge" style="background: rgba(46,204,113,0.15); color: var(--ok); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;">COP ➔ VES</span>
+          </div>
+
+          <div style="border-top: 1px dashed rgba(255,255,255,0.08); margin: 6px 0;"></div>
+
+          <!-- Input Amount -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; color: var(--muted);">Entregó (Monto In)</span>
+            <span id="receiptInputAmt" style="font-size: 16px; font-weight: 700; color: var(--text);">—</span>
+          </div>
+
+          <!-- Output Amount -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; color: var(--muted);">Recibe (Monto Out)</span>
+            <span id="receiptOutputAmt" style="font-size: 18px; font-weight: 800; color: var(--accent);">—</span>
+          </div>
+
+          <div style="border-top: 1px dashed rgba(255,255,255,0.08); margin: 6px 0;"></div>
+
+          <!-- Rates -->
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span style="font-size: 11px; color: var(--muted); text-transform: uppercase;">Tasas de Cambio</span>
+            <span id="receiptRates" class="mono" style="font-size: 10px; color: var(--muted); text-align: right; line-height: 1.3;">—</span>
+          </div>
+        </div>
+
+        <!-- Decorative Barcode or Brand Seal -->
+        <div style="border-top: 1px dashed rgba(255,255,255,0.12); padding-top: 15px; margin-top: 15px; text-align: center;">
+          <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 4px;">
+            <!-- Simple simulated barcode using elegant lines -->
+            <div style="display: flex; align-items: center; gap: 2px; height: 20px; opacity: 0.3;">
+              <span style="width: 2px; height: 100%; background: var(--text);"></span>
+              <span style="width: 1px; height: 100%; background: var(--text);"></span>
+              <span style="width: 4px; height: 100%; background: var(--text);"></span>
+              <span style="width: 2px; height: 100%; background: var(--text);"></span>
+              <span style="width: 1px; height: 100%; background: var(--text);"></span>
+              <span style="width: 3px; height: 100%; background: var(--text);"></span>
+              <span style="width: 1px; height: 100%; background: var(--text);"></span>
+              <span style="width: 4px; height: 100%; background: var(--text);"></span>
+              <span style="width: 2px; height: 100%; background: var(--text);"></span>
+              <span style="width: 1px; height: 100%; background: var(--text);"></span>
+              <span style="width: 3px; height: 100%; background: var(--text);"></span>
+              <span style="width: 2px; height: 100%; background: var(--text);"></span>
+            </div>
+            <div style="font-size: 9px; color: var(--muted); letter-spacing: 2px; font-family: monospace;">TRANS-OK-SECURE</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="btnReceiptDownload" class="btn primary" type="button" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          📸 Descargar Comprobante (Imagen)
+        </button>
+        <button id="btnReceiptWhatsapp" class="btn" type="button" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; border-color: rgba(46,204,113,0.3); color: var(--ok); background: rgba(46,204,113,0.05);">
+          🟢 Compartir por WhatsApp
+        </button>
+        <button id="btnReceiptClose" class="btn" type="button" style="width: 100%;">
+          Cerrar
+        </button>
+      </div>
+      <div id="receiptMsg" class="hint" style="margin-top:10px; text-align:center;"></div>
+    </div>
+  </div>
 `;
 
 
@@ -1519,6 +1614,10 @@ $("btnLogin")?.addEventListener("click", async () => {
 
     setUserBadge();
     $("btnLogout").style.display = "";
+    
+    // update latest activity for connection mapping
+    updateLatestActivityOnServer().catch(() => {});
+
     // admin tab visibility
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
@@ -1596,6 +1695,9 @@ async function bootstrapAuth() {
 
     setUserBadge();
     $("btnLogout").style.display = "";
+
+    // update latest activity for connection mapping on boot
+    updateLatestActivityOnServer().catch(() => {});
 
     // admin tab visibility
     const isAdmin = state.user?.role === "admin";
@@ -2540,29 +2642,48 @@ async function loadAdminUsers() {
   // Fetch audits to match subscribers with their latest connection info and online status
   let audits = [];
   try {
-    const rawHistory = await apiFetch("/api/admin/history", { method: "GET" });
-    if (Array.isArray(rawHistory)) {
-      audits = rawHistory;
-    } else if (rawHistory && Array.isArray(rawHistory.audits)) {
-      audits = rawHistory.audits;
-    } else if (rawHistory && Array.isArray(rawHistory.history)) {
-      audits = rawHistory.history;
-    } else if (rawHistory && Array.isArray(rawHistory.data)) {
-      audits = rawHistory.data;
-    }
+    audits = await loadHistory(data.users || []);
   } catch (e) {
     console.warn("No se pudo cargar el historial de auditoría para mapear conexiones:", e);
   }
 
   // Map user email (trimmed lowercase) to their latest activity
   const activityMap = {};
+  
+  // First, map latest active times from lastActiveAt field in branding
+  const usersList = data.users || [];
+  usersList.forEach((u) => {
+    let brandObj = null;
+    if (u.branding) {
+      if (typeof u.branding === "string") {
+        try { brandObj = JSON.parse(u.branding); } catch {}
+      } else if (typeof u.branding === "object") {
+        brandObj = u.branding;
+      }
+    }
+    const emailKey = String(u.email).trim().toLowerCase();
+    if (brandObj && brandObj.lastActiveAt) {
+      activityMap[emailKey] = {
+        timestamp: brandObj.lastActiveAt,
+        sec_timezone: brandObj.lastActiveTz || "Desconocida",
+        sec_ua: brandObj.lastActiveUa || "Navegador Web"
+      };
+    }
+  });
+
+  // Second, override if they have a newer registered operation in audits
   if (Array.isArray(audits)) {
     audits.forEach((item) => {
       if (!item || !item.user) return;
       const emailKey = String(item.user).trim().toLowerCase();
       const itemTime = item.timestamp ? new Date(item.timestamp).getTime() : 0;
-      if (!activityMap[emailKey] || itemTime > new Date(activityMap[emailKey].timestamp).getTime()) {
-        activityMap[emailKey] = item;
+      const existingTime = activityMap[emailKey] ? new Date(activityMap[emailKey].timestamp).getTime() : 0;
+      if (itemTime > existingTime) {
+        activityMap[emailKey] = {
+          timestamp: item.timestamp,
+          sec_timezone: item.sec_timezone || "Desconocida",
+          sec_ua: item.sec_ua || "Navegador Web"
+        };
       }
     });
   }
@@ -2943,6 +3064,13 @@ function setupLiveRates() {
       silentUpdateRates();
     }
   }, 1000);
+
+  // Heartbeat para mantener el estado "En línea" de los suscriptores activos
+  setInterval(() => {
+    if (state.user) {
+      updateLatestActivityOnServer().catch(() => {});
+    }
+  }, 3 * 60 * 1000); // 3 minutos
 }
 
 async function silentUpdateRates() {
@@ -2997,7 +3125,7 @@ function getCleanUserAgent() {
   return "Navegador Web";
 }
 
-async function loadHistory() {
+async function loadHistory(preloadedUsers = null) {
   if (state.user?.role !== "admin") {
     try {
       const raw = localStorage.getItem("CAZE_QUOTES_HISTORY");
@@ -3008,20 +3136,37 @@ async function loadHistory() {
   }
 
   try {
-    const data = await apiFetch("/api/admin/history", { method: "GET" });
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.history)) return data.history;
-    if (data && Array.isArray(data.audits)) return data.audits;
-    if (data && Array.isArray(data.data)) return data.data;
-    return [];
-  } catch (e) {
-    console.warn("No se pudo cargar el historial desde el servidor:", e);
-    try {
-      const raw = localStorage.getItem("CAZE_QUOTES_HISTORY");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
+    let users = preloadedUsers;
+    if (!users) {
+      const data = await apiFetch("/api/admin/users", { method: "GET" });
+      users = data?.users || [];
     }
+    let audits = [];
+    users.forEach(u => {
+      let brandObj = null;
+      if (u.branding) {
+        if (typeof u.branding === "string") {
+          try {
+            brandObj = JSON.parse(u.branding);
+          } catch {}
+        } else if (typeof u.branding === "object") {
+          brandObj = u.branding;
+        }
+      }
+      if (brandObj && Array.isArray(brandObj.operations)) {
+        brandObj.operations.forEach(op => {
+          const enrichedOp = { ...op };
+          enrichedOp.user = u.email;
+          audits.push(enrichedOp);
+        });
+      }
+    });
+
+    audits.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return audits;
+  } catch (e) {
+    console.warn("No se pudo cargar el historial unificado de auditoría:", e);
+    return [];
   }
 }
 
@@ -3248,9 +3393,144 @@ function wireHistoryTabEvents() {
   $("adminAuditSearch")?.addEventListener("input", renderAdminAuditUI);
 }
 
+// ---------- NUEVAS FUNCIONES DE COMPROBANTES Y ACTIVIDAD ----------
+
+async function updateLatestActivityOnServer() {
+  if (!state.user) return;
+  if (!state.branding) {
+    state.branding = { ...DEFAULT_BRANDING };
+  }
+  state.branding.lastActiveAt = new Date().toISOString();
+  state.branding.lastActiveTz = (typeof Intl !== "undefined" && Intl.DateTimeFormat) 
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone 
+    : "Desconocida";
+  state.branding.lastActiveUa = getCleanUserAgent();
+  
+  await saveBrandingLocal(state.branding);
+}
+
+function showReceiptModal(entry) {
+  const modal = $("receiptModal");
+  if (!modal) return;
+
+  const brandName = getBrandName();
+  const txId = entry.id;
+  const formattedDate = new Date(entry.timestamp).toLocaleString("es-ES", {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+  });
+
+  const isCopVes = entry.direction === "cop_ves";
+  const inputVal = isCopVes 
+    ? money("COP", entry.inputAmount, 0) 
+    : (entry.inputCurrency === "USD" ? money("USD", entry.inputAmount, 2) : money("VES", entry.inputAmount, 2));
+
+  const outputVal = money(entry.outputCurrency, entry.outputAmount, isCopVes ? 2 : 0);
+
+  // Set text contents
+  const brandNameEl = $("receiptBrandName");
+  if (brandNameEl) brandNameEl.textContent = brandName;
+
+  const txIdEl = $("receiptTxId");
+  if (txIdEl) txIdEl.textContent = txId;
+
+  const dateEl = $("receiptDate");
+  if (dateEl) dateEl.textContent = formattedDate;
+
+  const directionEl = $("receiptDirection");
+  if (directionEl) {
+    directionEl.textContent = entry.directionLabel;
+    directionEl.style.background = isCopVes ? "rgba(46,204,113,0.15)" : "rgba(78,161,255,0.15)";
+    directionEl.style.color = isCopVes ? "var(--ok)" : "var(--accent)";
+  }
+
+  const inputAmtEl = $("receiptInputAmt");
+  if (inputAmtEl) inputAmtEl.textContent = inputVal;
+
+  const outputAmtEl = $("receiptOutputAmt");
+  if (outputAmtEl) outputAmtEl.textContent = outputVal;
+
+  const ratesEl = $("receiptRates");
+  if (ratesEl) ratesEl.innerHTML = entry.rates.replace(" | ", "<br/>");
+
+  const msgEl = $("receiptMsg");
+  if (msgEl) msgEl.textContent = "";
+
+  // Show modal
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+
+  // Wire Download Button
+  const btnDownload = $("btnReceiptDownload");
+  if (btnDownload) {
+    btnDownload.onclick = async () => {
+      if (msgEl) msgEl.textContent = "Generando comprobante...";
+      try {
+        const html2canvas = await getHtml2Canvas();
+        const ticket = $("receiptTicket");
+        const canvas = await html2canvas(ticket, {
+          backgroundColor: "#0f172a",
+          scale: 2.5, // Crisp high-res export
+          useCORS: true
+        });
+        canvas.toBlob((blob) => {
+          if (!blob) throw new Error("No blob generated");
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `comprobante_${txId}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+          if (msgEl) msgEl.textContent = "Comprobante descargado ✅";
+        }, "image/png");
+      } catch (e) {
+        console.error(e);
+        if (msgEl) msgEl.textContent = "Error al generar imagen.";
+      }
+    };
+  }
+
+  // Wire WhatsApp Button
+  const btnWhatsapp = $("btnReceiptWhatsapp");
+  if (btnWhatsapp) {
+    btnWhatsapp.onclick = () => {
+      const text = `*COMPROBANTE DE TRANSACCIÓN* 🧾\n` +
+                   `*${brandName}*\n\n` +
+                   `*ID:* ${txId}\n` +
+                   `*Fecha:* ${formattedDate}\n` +
+                   `*Operación:* ${entry.directionLabel}\n` +
+                   `*Monto Entregado:* ${inputVal}\n` +
+                   `*Monto Recibido:* ${outputVal}\n` +
+                   `*Tasas:* ${entry.rates}\n\n` +
+                   `¡Gracias por confiar en nosotros! ✨`;
+
+      const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank");
+    };
+  }
+
+  // Wire Close Button
+  const btnClose = $("btnReceiptClose");
+  if (btnClose) {
+    btnClose.onclick = () => {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    };
+  }
+  const btnCloseTop = $("btnReceiptCloseTop");
+  if (btnCloseTop) {
+    btnCloseTop.onclick = () => {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    };
+  }
+}
+
 // ---------- NUEVAS FUNCIONES DE 'MIS REGISTROS' (CAJA DIARIA DEL SUSCRIPTOR) ----------
 
 function loadMyRecords() {
+  if (state.branding && Array.isArray(state.branding.operations)) {
+    return state.branding.operations;
+  }
   try {
     const raw = localStorage.getItem("CAZE_USER_OPERATIONS");
     return raw ? JSON.parse(raw) : [];
@@ -3263,13 +3543,29 @@ function saveMyRecords(records) {
   try {
     localStorage.setItem("CAZE_USER_OPERATIONS", JSON.stringify(records));
   } catch {}
+  if (state.user) {
+    if (!state.branding) {
+      state.branding = { ...DEFAULT_BRANDING };
+    }
+    state.branding.operations = records;
+    saveBrandingLocal(state.branding);
+  }
 }
 
 function addMyRecordEntry(entry) {
+  // Enrich entry with security headers for audit trail
+  entry.sec_ua = getCleanUserAgent();
+  entry.sec_timezone = (typeof Intl !== "undefined" && Intl.DateTimeFormat) 
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone 
+    : "Desconocida";
+
   const records = loadMyRecords();
   records.unshift(entry);
   saveMyRecords(records);
   renderMyRecordsUI();
+
+  // Show Receipt/Invoice Modal
+  showReceiptModal(entry);
 }
 
 function deleteMyRecord(id) {
