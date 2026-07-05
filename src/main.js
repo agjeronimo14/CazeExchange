@@ -71,27 +71,52 @@ function isHexColor(v) {
 }
 
 function normalizeBranding(input = {}) {
+  let parsed = input;
+  if (typeof input === "string") {
+    try {
+      parsed = JSON.parse(input);
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!parsed || typeof parsed !== "object") {
+    parsed = {};
+  }
+
   const out = { ...DEFAULT_BRANDING };
 
   // theme
-  const theme = String(input.theme || "").trim().toLowerCase();
+  const theme = String(parsed.theme || "").trim().toLowerCase();
   out.theme = BRAND_THEMES.includes(theme) ? theme : DEFAULT_BRANDING.theme;
 
   // accent
-  let accent = String(input.accent || input.accent_color || "").trim();
+  let accent = String(parsed.accent || parsed.accent_color || "").trim();
   if (accent && !accent.startsWith("#")) accent = `#${accent}`;
   if (/^#[0-9a-fA-F]{3}$/.test(accent)) {
-    accent = `#${accent[1]}${accent[1]}${accent[2]}${accent[2]}${accent[3]}${accent[3]}`;
+    accent = `#${accent[1]}${parsed.accent[1]}${parsed.accent[2]}${parsed.accent[2]}${parsed.accent[3]}${parsed.accent[3]}`;
   }
   if (!/^#[0-9a-fA-F]{6}$/.test(accent)) accent = DEFAULT_BRANDING.accent;
   out.accent = accent.toLowerCase();
 
   // brand name
-  let name = String(input.brand_name ?? input.brandName ?? "");
+  let name = String(parsed.brand_name ?? parsed.brandName ?? "");
   name = name.replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
   if (!name) name = DEFAULT_BRANDING.brand_name;
   if (name.length > 40) name = name.slice(0, 40).trim();
   out.brand_name = name;
+
+  // Preserve operations!
+  if (Array.isArray(parsed.operations)) {
+    out.operations = parsed.operations;
+  } else if (parsed.operations && typeof parsed.operations === "string") {
+    try {
+      out.operations = JSON.parse(parsed.operations);
+    } catch {
+      out.operations = [];
+    }
+  } else {
+    out.operations = [];
+  }
 
   return out;
 }
@@ -281,7 +306,7 @@ function isLimitedUser() {
 
 function applyRoleGates() {
   const limited = isLimitedUser();
-  if ($("btnExport")) $("btnExport").disabled = limited;
+  if ($("btnExportPosterLocal")) $("btnExportPosterLocal").disabled = limited;
 
   const canSaveBranding = !!state.user;
   if ($("btnBrandSave")) $("btnBrandSave").disabled = !canSaveBranding;
@@ -757,6 +782,7 @@ const state = {
   quoteMode: (typeof localStorage !== "undefined" && localStorage.getItem("quoteMode")) || "goal",
   invLast: (typeof localStorage !== "undefined" && localStorage.getItem("invLast")) || "invVes",
   vesCurrency: (typeof localStorage !== "undefined" && localStorage.getItem("CAZE_VES_CURRENCY")) || "ves",
+  activePosterTab: "cop_ves",
 
   // Nuevos Ajustes Profesionales
   deferredInstallPrompt: null,
@@ -799,7 +825,6 @@ mount.innerHTML = `
         </button>
 
         <button id="btnUpdate" class="btn primary">Actualizar tasas</button>
-        <button id="btnExport" class="btn">Exportar imagen</button>
         <button id="btnLogout" class="btn" style="display:none">Salir</button>
         <span id="status" class="badge mono">Listo</span>
       </div>
@@ -1375,52 +1400,99 @@ mount.innerHTML = `
             <button id="btnManualRegisterVes" class="btn success" type="button" style="background:#25d366; color:#000; font-weight:700; border:none; display:inline-flex; align-items:center; gap:4px">💾 Registrar</button>
             <span id="vesWaMsg" class="hint" style="margin-left:auto"></span>
           </div>
+
+          <div style="height:15px"></div>
+          <hr/>
+          <h2>Cálculo inverso (opcional): “quiero que me llegue…”</h2>
+          <p class="hint">Escribe el objetivo y te calcula cuánto debe entregar el cliente (VES o USD) considerando tu ganancia.</p>
+
+          <div class="invTableWrap">
+            <table class="invTable">
+              <thead>
+                <tr>
+                  <th style="width:34%">Objetivo</th>
+                  <th style="width:18%">Monto objetivo</th>
+                  <th style="width:20%">Equiv. USD objetivo</th>
+                  <th style="width:14%">Debe entregar (VES)</th>
+                  <th style="width:14%">Debe entregar (USD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr id="row_invVesCop_cop">
+                  <td><b>Recibir COP</b></td>
+                  <td><input id="invVesCop_cop" inputmode="decimal" placeholder="Ej: 20000" /></td>
+                  <td id="invVesCop_copEq">—</td>
+                  <td id="invVesCop_copVes">—</td>
+                  <td id="invVesCop_copUsd">—</td>
+                </tr>
+                <tr id="row_invVesCop_usd">
+                  <td><b>Recibir USD equiv</b></td>
+                  <td><input id="invVesCop_usd" inputmode="decimal" placeholder="Ej: 50" /></td>
+                  <td id="invVesCop_usdEq">—</td>
+                  <td id="invVesCop_usdVes">—</td>
+                  <td id="invVesCop_usdUsd">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="pane" data-tabs="rates">
-          <div class="posterHeader">
-          <div>
-            <h2 style="margin:0">Tabla para redes (exportable)</h2>
-            <div class="hint">Genera una imagen tipo “flyer” con montos ejemplo (COP → VES).</div>
-          </div>
-        </div>
-
-        <div id="poster" class="poster">
-          <div class="posterTop">
-            <div id="posterBrand" class="posterBrand">CAZEEXCHANGE</div>
-            <div class="posterTitle">Cotiza en segundos. Envía a Venezuela.</div>
-            <div class="posterSub no-export" id="posterMeta">—</div>
-
-            <div class="posterRate">
-              <div class="posterRateLabel">Tasa grande (COP por 1 VES)</div>
-              <div id="posterRateValue" class="posterRateValue">—</div>
-              <div id="posterRateNote" class="posterRateNote">—</div>
+          <div class="posterHeader" style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
+            <div>
+              <h2 style="margin:0">Tabla para redes (exportable)</h2>
+              <div class="hint">Genera una imagen tipo “flyer” con montos de referencia.</div>
+            </div>
+            <!-- Segmented Control to switch between flyers -->
+            <div style="display:flex; gap:4px; background:rgba(255,255,255,0.04); padding:3px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); height:fit-content;">
+              <button id="btnPosterTabCopVes" class="btn xs" style="border:none; padding:4px 10px; font-weight:700; cursor:pointer; border-radius:6px; font-size:11px; transition:all 0.2s;" type="button">COP ➔ VES</button>
+              <button id="btnPosterTabVesCop" class="btn xs" style="border:none; padding:4px 10px; font-weight:700; cursor:pointer; border-radius:6px; font-size:11px; transition:all 0.2s;" type="button">VES ➔ COP</button>
             </div>
           </div>
 
-          <div class="posterBody">
-            <div class="posterTableWrap">
-              <table class="posterTable">
-                <thead>
-                  <tr>
-                    <th>Entrega (COP)</th>
-                    <th>Recibe (VES)</th>
-                  </tr>
-                </thead>
-                <tbody id="posterRows"></tbody>
-              </table>
+          <div id="poster" class="poster">
+            <div class="posterTop">
+              <div id="posterBrand" class="posterBrand">CAZEEXCHANGE</div>
+              <div id="posterTitle" class="posterTitle">Cotiza en segundos. Envía a Venezuela.</div>
+              <div class="posterSub no-export" id="posterMeta">—</div>
+
+              <div class="posterRate no-export">
+                <div id="posterRateLabel" class="posterRateLabel">Tasa grande (COP por 1 VES)</div>
+                <div id="posterRateValue" class="posterRateValue">—</div>
+                <div id="posterRateNote" class="posterRateNote">—</div>
+              </div>
+            </div>
+
+            <div class="posterBody">
+              <div class="posterTableWrap">
+                <table class="posterTable">
+                  <thead>
+                    <tr>
+                      <th id="posterCol1">Entrega (COP)</th>
+                      <th id="posterCol2">Recibe (VES)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="posterRows"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="posterBottom">
+              <div class="posterNote no-export">
+                Actualiza tasas arriba. USDT/COP y USDT/VES son manuales por ahora.
+              </div>
+              <div class="posterFooter no-export">
+                Elaborado por Alejandro Gomez
+              </div>
             </div>
           </div>
 
-          <div class="posterBottom">
-            <div class="posterNote no-export">
-              Actualiza tasas arriba. USDT/COP y USDT/VES son manuales por ahora.
-            </div>
-            <div class="posterFooter no-export">
-              Elaborado por Alejandro Gomez
-            </div>
+          <!-- Dedicated Export Button placed directly below the flyer! -->
+          <div style="margin-top:15px; display:flex; justify-content:center;">
+            <button id="btnExportPosterLocal" class="btn primary" style="width:100%; max-width:400px; font-weight:700; padding:12px; font-size:13px; border-radius:10px; background:var(--accent); color:#000; border:none; cursor:pointer; box-shadow:0 4px 15px rgba(255,160,0,0.3); display:inline-flex; align-items:center; justify-content:center; gap:8px;" type="button">
+              📥 Exportar Imagen de Tabla de Redes
+            </button>
           </div>
-        </div>
         </section>
 
         <section class="pane" data-tabs="myRecords" style="display:none">
@@ -1769,6 +1841,17 @@ function highlightInvRows() {
     const tr = document.getElementById(rid);
     if (!tr) return;
     const on = state.quoteMode === "goal" && state.invLast === key;
+    tr.classList.toggle("rowActive", on);
+  });
+
+  const vesCopRows = [
+    ["invVesCop_cop", "row_invVesCop_cop"],
+    ["invVesCop_usd", "row_invVesCop_usd"]
+  ];
+  vesCopRows.forEach(([key, rid]) => {
+    const tr = document.getElementById(rid);
+    if (!tr) return;
+    const on = state.invLast === key;
     tr.classList.toggle("rowActive", on);
   });
 }
@@ -2281,6 +2364,84 @@ function calcVesToCop() {
   if (waEl) waEl.value = msg;
 }
 
+function calcVesCopInverse() {
+  const copTargetVal = parseNum($("invVesCop_cop")?.value);
+  const usdTargetVal = parseNum($("invVesCop_usd")?.value);
+
+  const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value);
+  const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
+  const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || null;
+
+  const vesFeeType = $("vesFeeType")?.value;
+  const vesFeePct = parseNum($("vesFeePct")?.value) / 100;
+  const vesFeeFixed = parseNum($("vesFeeFixed")?.value);
+
+  const usdBcv = parseNum($("usdVesOf")?.value);
+  const usdPar = parseNum($("usdVesPar")?.value);
+  const eurVes = parseNum($("eurVes")?.value);
+  const eurUsd = parseNum($("eurUsd")?.value);
+  const usdViaEur = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
+  const usdtVesSell = parseNum($("usdtVesSell")?.value);
+  const usdtVesBuy = parseNum($("usdtVesBuy")?.value);
+
+  let rateVesPerUsd = null;
+  const rateType = $("vesUsdRateType")?.value;
+  if (rateType === "usdtVesBuy") {
+    rateVesPerUsd = usdtVesBuy;
+  } else if (rateType === "usdtVesSell") {
+    rateVesPerUsd = usdtVesSell;
+  } else if (rateType === "usdVesPar") {
+    rateVesPerUsd = usdPar;
+  } else if (rateType === "usdVesOf") {
+    rateVesPerUsd = usdBcv;
+  } else if (rateType === "eurVes") {
+    rateVesPerUsd = usdViaEur;
+  }
+
+  // 1. Recibir COP
+  if (copTargetVal > 0 && vesUsdtCopBuy && rateVesPerUsd) {
+    const netUsdt = copTargetVal / vesUsdtCopBuy;
+    let baseUsdt = 0;
+    if (vesFeeType === "pct") {
+      baseUsdt = netUsdt / (1 - vesFeePct);
+    } else {
+      baseUsdt = netUsdt + vesFeeFixed;
+    }
+    const reqVes = baseUsdt * rateVesPerUsd;
+    const reqUsd = baseUsdt;
+
+    setText("invVesCop_copEq", money("USDT", netUsdt, 2));
+    setText("invVesCop_copVes", fmt(reqVes, 2));
+    setText("invVesCop_copUsd", fmt(reqUsd, 2));
+  } else {
+    setText("invVesCop_copEq", "—");
+    setText("invVesCop_copVes", "—");
+    setText("invVesCop_copUsd", "—");
+  }
+
+  // 2. Recibir USD
+  if (usdTargetVal > 0 && vesUsdtCopBuy && rateVesPerUsd) {
+    const copTarget = usdTargetVal * vesUsdtCopBuy;
+    const netUsdt = usdTargetVal;
+    let baseUsdt = 0;
+    if (vesFeeType === "pct") {
+      baseUsdt = netUsdt / (1 - vesFeePct);
+    } else {
+      baseUsdt = netUsdt + vesFeeFixed;
+    }
+    const reqVes = baseUsdt * rateVesPerUsd;
+    const reqUsd = baseUsdt;
+
+    setText("invVesCop_usdEq", money("COP", copTarget, 0));
+    setText("invVesCop_usdVes", fmt(reqVes, 2));
+    setText("invVesCop_usdUsd", fmt(reqUsd, 2));
+  } else {
+    setText("invVesCop_usdEq", "—");
+    setText("invVesCop_usdVes", "—");
+    setText("invVesCop_usdUsd", "—");
+  }
+}
+
 function wireVesWhatsappActions() {
   const btnCopy = document.getElementById('btnCopyVesWA');
   const btnOpen = document.getElementById('btnOpenVesWA');
@@ -2314,50 +2475,123 @@ function renderPoster(activeQuote) {
   const tbody = $("posterRows");
   if (!tbody) return;
 
-  const amounts = [20000, 50000, 100000, 200000, 350000, 750000, 1000000];
+  const isCopVes = state.activePosterTab === "cop_ves";
 
-  // Reutilizamos el cálculo principal con cada monto, manteniendo tasas y ganancia actuales
-  const usdtCopBuy = parseNum($("usdtCopBuy").value);
-  const usdtVesSell = parseNum($("usdtVesSell").value);
-  const feeType = $("feeType").value;
-  const feePct = parseNum($("feePct").value) / 100;
-  const feeFixed = parseNum($("feeFixed").value);
-
-  const usdViaEur = usdVesViaEur();
-  const methodLabel = (usdViaEur ? "EUR BCV" : "Binance manual");
-
-  // meta (pero NO export)
-  const gainLabel = feeType === "pct" ? `${fmt(feePct * 100, 0)}%` : `${fmt(feeFixed, 2)} USDT`;
-// Tasa grande en el flyer (SÍ se exporta)
-  const rateSource = (activeQuote && activeQuote.copPerVes) ? activeQuote : null;
-  if (rateSource && rateSource.copPerVes) {
-    setText("posterRateValue", `COP ${fmt(rateSource.copPerVes, 6)}`);
-    setText("posterRateNote", "COP por 1 VES");
-  } else {
-    setText("posterRateValue", "—");
-    setText("posterRateNote", "Completa USDT/COP + tasas" );
+  // Update tabs buttons UI inside rates poster
+  const btnCopVes = $("btnPosterTabCopVes");
+  const btnVesCop = $("btnPosterTabVesCop");
+  if (btnCopVes && btnVesCop) {
+    if (isCopVes) {
+      btnCopVes.style.background = "var(--accent)";
+      btnCopVes.style.color = "#000";
+      btnVesCop.style.background = "transparent";
+      btnVesCop.style.color = "var(--text)";
+    } else {
+      btnVesCop.style.background = "var(--accent)";
+      btnVesCop.style.color = "#000";
+      btnCopVes.style.background = "transparent";
+      btnCopVes.style.color = "var(--text)";
+    }
   }
 
-  tbody.innerHTML = amounts.map((cop) => {
-    if (!usdtCopBuy) return `
-      <tr><td>${money("COP", cop, 0)}</td><td>—</td></tr>
-    `;
+  // Update title & headers
+  setText("posterTitle", isCopVes ? "Cotiza en segundos. Envía a Venezuela." : "Cotiza en segundos. Envía a Colombia.");
+  const col1 = $("posterCol1");
+  const col2 = $("posterCol2");
+  if (col1) col1.textContent = isCopVes ? "Entrega (COP)" : "Entrega (VES)";
+  if (col2) col2.textContent = isCopVes ? "Recibe (VES)" : "Recibe (COP)";
 
-    const baseUsdt = cop / usdtCopBuy;
-    const feeUsdt = feeType === "pct" ? baseUsdt * feePct : feeFixed;
-    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+  if (isCopVes) {
+    const amounts = [20000, 50000, 100000, 200000, 350000, 750000, 1000000];
+    const usdtCopBuy = parseNum($("usdtCopBuy").value);
+    const usdtVesSell = parseNum($("usdtVesSell").value);
+    const feeType = $("feeType").value;
+    const feePct = parseNum($("feePct").value) / 100;
+    const feeFixed = parseNum($("feeFixed").value);
+    const usdViaEur = usdVesViaEur();
 
-    const ves = usdViaEur
-      ? netUsdt * usdViaEur
-      : (usdtVesSell ? netUsdt * usdtVesSell : null);
+    const rateSource = (activeQuote && activeQuote.copPerVes) ? activeQuote : null;
+    if (rateSource && rateSource.copPerVes) {
+      setText("posterRateValue", `COP ${fmt(rateSource.copPerVes, 6)}`);
+      setText("posterRateNote", "COP por 1 VES");
+    } else {
+      setText("posterRateValue", "—");
+      setText("posterRateNote", "Completa USDT/COP + tasas");
+    }
 
-    return `
-      <tr>
-        <td><b>${money("COP", cop, 0)}</b></td>
-        <td><b>${ves ? money("VES", ves, 2) : "—"}</b></td>
-      </tr>
-    `;
-  }).join("");
+    tbody.innerHTML = amounts.map((cop) => {
+      if (!usdtCopBuy) return `<tr><td><b>${money("COP", cop, 0)}</b></td><td>—</td></tr>`;
+
+      const baseUsdt = cop / usdtCopBuy;
+      const feeUsdt = feeType === "pct" ? baseUsdt * feePct : feeFixed;
+      const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+      const ves = usdViaEur ? netUsdt * usdViaEur : (usdtVesSell ? netUsdt * usdtVesSell : null);
+
+      return `
+        <tr>
+          <td><b>${money("COP", cop, 0)}</b></td>
+          <td><b>${ves ? money("VES", ves, 2) : "—"}</b></td>
+        </tr>
+      `;
+    }).join("");
+
+  } else {
+    const amounts = [1000, 5000, 10000, 20000, 30000, 40000, 50000];
+    const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value);
+    const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
+    const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || null;
+
+    const vesFeeType = $("vesFeeType")?.value;
+    const vesFeePct = parseNum($("vesFeePct")?.value) / 100;
+    const vesFeeFixed = parseNum($("vesFeeFixed")?.value);
+
+    const usdBcv = parseNum($("usdVesOf")?.value);
+    const usdPar = parseNum($("usdVesPar")?.value);
+    const eurVes = parseNum($("eurVes")?.value);
+    const eurUsd = parseNum($("eurUsd")?.value);
+    const usdViaEur = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
+    const usdtVesSell = parseNum($("usdtVesSell")?.value);
+    const usdtVesBuy = parseNum($("usdtVesBuy")?.value);
+
+    let rateVesPerUsd = null;
+    const rateType = $("vesUsdRateType")?.value;
+    if (rateType === "usdtVesBuy") {
+      rateVesPerUsd = usdtVesBuy;
+    } else if (rateType === "usdtVesSell") {
+      rateVesPerUsd = usdtVesSell;
+    } else if (rateType === "usdVesPar") {
+      rateVesPerUsd = usdPar;
+    } else if (rateType === "usdVesOf") {
+      rateVesPerUsd = usdBcv;
+    } else if (rateType === "eurVes") {
+      rateVesPerUsd = usdViaEur;
+    }
+
+    if (rateVesPerUsd && vesUsdtCopBuy) {
+      const rate = (1 / rateVesPerUsd) * (1 - (vesFeeType === "pct" ? vesFeePct : 0)) * vesUsdtCopBuy;
+      setText("posterRateValue", `COP ${fmt(rate, 6)}`);
+      setText("posterRateNote", "COP por 1 VES");
+    } else {
+      setText("posterRateValue", "—");
+      setText("posterRateNote", "Completa tasas VES ➔ COP");
+    }
+
+    tbody.innerHTML = amounts.map((ves) => {
+      if (!rateVesPerUsd || !vesUsdtCopBuy) return `<tr><td><b>${money("VES", ves, 2)}</b></td><td>—</td></tr>`;
+
+      const baseUsdt = ves / rateVesPerUsd;
+      const feeUsdt = vesFeeType === "pct" ? baseUsdt * vesFeePct : vesFeeFixed;
+      const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+      const cop = netUsdt * vesUsdtCopBuy;
+
+      return `
+        <tr>
+          <td><b>${money("VES", ves, 0)}</b></td>
+          <td><b>${cop ? money("COP", cop, 0) : "—"}</b></td>
+        </tr>
+      `;
+    }).join("");
+  }
 }
 
 async function exportPoster() {
@@ -2577,6 +2811,7 @@ function recalcAll() {
   const active = getActiveQuote(main, primaryInv);
 
   calcVesToCop();
+  calcVesCopInverse();
 
   const badge = $("quoteSourceBadge");
   if (badge) {
@@ -2917,7 +3152,15 @@ Escríbeme por aquí si necesitas ayuda.`;
   }
 }
 $("btnUpdate")?.addEventListener("click", updateRates);
-$("btnExport")?.addEventListener("click", exportPoster);
+$("btnExportPosterLocal")?.addEventListener("click", exportPoster);
+$("btnPosterTabCopVes")?.addEventListener("click", () => {
+  state.activePosterTab = "cop_ves";
+  recalcAll();
+});
+$("btnPosterTabVesCop")?.addEventListener("click", () => {
+  state.activePosterTab = "ves_cop";
+  recalcAll();
+});
 $("btnAdminCreate")?.addEventListener("click", adminCreateUser);
 $("btnAdminReload")?.addEventListener("click", loadAdminUsers);
 
@@ -2954,7 +3197,7 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
   "inCop","feeType","feePct","feeFixed",
   "usdVesOf","usdVesPar","eurVes","eurUsd",
   "usdtCopBuy","usdtVesSell","usdtVesBuy","usdtCopSell","adjBcv","adjPar","adjUsdtCop","adjUsdtVes","adjUsdtVesBuy","adjUsdtCopSell",
-  "invVes","invUsdBcv","invUsdPar","invUsdEur","invEur",
+  "invVes","invUsdBcv","invUsdPar","invUsdEur","invEur","invVesCop_cop","invVesCop_usd",
   "inVes","vesUsdRateType","vesUsdtCopBuy","vesFeeType","vesFeePct","vesFeeFixed"
 ].forEach(id => {
   const n = $(id);
