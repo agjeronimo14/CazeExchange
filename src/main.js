@@ -380,7 +380,6 @@ function applyPhase2Layout() {
       <button class="tabBtn" data-tab="vesToCop" type="button">VES ➔ COP</button>
       <button class="tabBtn" data-tab="rates" type="button">Tasas/Ajustes</button>
       <button class="tabBtn" data-tab="myRecords" id="tabMyRecordsMobile" type="button" style="display:none">Mis Registros</button>
-      <button class="tabBtn" data-tab="history" id="tabHistoryMobile" type="button" style="display:none">Historial</button>
       <button class="tabBtn" data-tab="admin" id="tabAdminMobile" type="button" style="display:none">Admin</button>
     `;
     container.appendChild(nav);
@@ -447,9 +446,7 @@ function wireTabButtons() {
   document.querySelectorAll('.tabBtn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       setActiveTab(btn.dataset.tab);
-      if (btn.dataset.tab === "history") {
-        await renderHistoryUI();
-      } else if (btn.dataset.tab === "myRecords") {
+      if (btn.dataset.tab === "myRecords") {
         renderMyRecordsUI();
       }
     });
@@ -836,7 +833,6 @@ mount.innerHTML = `
       <button class="tabBtn" data-tab="vesToCop" id="tabVesToCop" type="button">De VES a COP</button>
       <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas y Ajustes</button>
       <button class="tabBtn" data-tab="myRecords" id="tabMyRecords" type="button" style="display:none">Mis Registros</button>
-      <button class="tabBtn" data-tab="history" id="tabHistory" type="button" style="display:none">Historial</button>
       <button class="tabBtn" data-tab="admin" id="tabAdmin" type="button" style="display:none">Admin</button>
     </div>
 
@@ -1240,44 +1236,16 @@ mount.innerHTML = `
             <table class="table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Plan</th>
-                  <th>Expira</th>
-                  <th>Días</th>
-                  <th>Activo</th>
+                  <th style="width:50px;">ID</th>
+                  <th>Suscriptor</th>
+                  <th>Expiración</th>
+                  <th>Última Actividad / Ubicación</th>
+                  <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody id="adminUsersTbody"></tbody>
             </table>
-          </div>
-        </section>
-
-        <section class="pane" data-tabs="history">
-          <h2>Auditoría de Cotizaciones Recientes</h2>
-          <p class="hint">Registro automático y seguro de todas las cotizaciones calculadas en este dispositivo.</p>
-
-          <div style="height:10px"></div>
-
-          <div class="row" style="margin-bottom: 12px; gap:8px; align-items: center;">
-            <div class="field">
-              <label>Buscar cotización (monto, usuario, etc.)</label>
-              <input id="historySearch" placeholder="Escribe para buscar..." style="padding: 8px 12px;" />
-            </div>
-            <div class="field" style="max-width:140px">
-              <label>Dirección</label>
-              <select id="historyFilterMode" style="padding: 8px 12px;">
-                <option value="all">Todas</option>
-                <option value="cop_ves">COP ➔ VES</option>
-                <option value="ves_cop">VES ➔ COP</option>
-              </select>
-            </div>
-          </div>
-
-          <div id="historyList" class="audit-list">
-            <div class="hint" style="text-align:center; padding:20px; color:var(--muted)">No hay cotizaciones registradas todavía. Realiza un cálculo para que aparezca aquí.</div>
           </div>
         </section>
 
@@ -1457,67 +1425,6 @@ mount.innerHTML = `
         </div>
         </section>
 
-        <section class="pane" data-tabs="history">
-          <h2>Resumen de Auditoría y Seguridad</h2>
-          <p class="hint">Métricas consolidadas de las operaciones registradas en este navegador.</p>
-          
-          <div style="height:10px"></div>
-
-          <div class="history-kpi-grid">
-            <div class="kpi" style="padding:10px;">
-              <div class="cap">Cotizaciones</div>
-              <div id="histCount" class="big" style="font-size:20px; font-weight:700;">0</div>
-            </div>
-            <div class="kpi" style="padding:10px;">
-              <div class="cap">Volumen (COP)</div>
-              <div id="histVolCop" class="big" style="font-size:16px; font-weight:700; word-break: break-all;">—</div>
-            </div>
-            <div class="kpi" style="padding:10px;">
-              <div class="cap">Ganancia (USDT)</div>
-              <div id="histProfit" class="big" style="font-size:16px; font-weight:700; color:var(--ok); word-break: break-all;">—</div>
-            </div>
-          </div>
-
-          <hr />
-
-          <h2>Detalles del Entorno de Seguridad (Audit Trail)</h2>
-          <p class="hint">Información técnica para auditoría y geolocalización de red.</p>
-          
-          <div style="height:10px"></div>
-
-          <div class="kpi" style="background: rgba(255,255,255,0.01); font-size:12px; line-height:1.7; padding:12px; border-radius:12px;">
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding-bottom:4px;">
-              <span style="color:var(--muted)">Usuario de sesión:</span>
-              <span id="auditUser" class="mono font-semibold">—</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
-              <span style="color:var(--muted)">Canal de Red:</span>
-              <span id="auditNetwork" class="mono font-semibold" style="color:var(--ok)">● Online (Secure TLS)</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
-              <span style="color:var(--muted)">Zona horaria:</span>
-              <span id="auditTimezone" class="mono">—</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
-              <span style="color:var(--muted)">Idioma:</span>
-              <span id="auditLang" class="mono">—</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; padding-top:4px;">
-              <span style="color:var(--muted)">Ubicación CDN:</span>
-              <span id="auditGeo" class="mono font-semibold" style="color:var(--accent)">Latinoamérica (Cloudflare Edge)</span>
-            </div>
-          </div>
-
-          <p class="hint" style="margin-top:10px; font-size:11px; color:var(--muted); line-height:1.35;">
-            * Nota de Seguridad SaaS: Para evitar que un suscriptor evada la auditoría borrando su historial, el servidor de CazeExchange registra de forma permanente cada cálculo en la base de datos Cloudflare D1 vinculando su cuenta, IP pública y país de conexión.
-          </p>
-
-          <div class="row" style="margin-top:14px;">
-            <button id="btnHistExport" class="btn" type="button" style="padding: 8px 10px; font-size:12px;">Exportar CSV</button>
-            <button id="btnHistClear" class="btn secondary" type="button" style="padding: 8px 10px; font-size:12px; color:var(--bad); border-color:rgba(255,90,106,0.25);">Limpiar todo</button>
-          </div>
-        </section>
-
         <section class="pane" data-tabs="myRecords" style="display:none">
           <h2>Resumen de mi Caja Diaria</h2>
           <p class="hint">Volumen de operaciones y ganancias acumuladas que has guardado hoy en este dispositivo.</p>
@@ -1618,8 +1525,6 @@ $("btnLogin")?.addEventListener("click", async () => {
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
-    $("tabHistory").style.display = isAdmin ? "" : "none";
-    if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = isAdmin ? "" : "none";
     
     // Mis registros visible para cualquier suscriptor autenticado
     $("tabMyRecords").style.display = "";
@@ -1646,8 +1551,6 @@ $("btnLogout")?.addEventListener("click", async () => {
   $("btnLogout").style.display = "none";
   $("tabAdmin").style.display = "none";
   if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
-  $("tabHistory").style.display = "none";
-  if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = "none";
   $("tabMyRecords").style.display = "none";
   if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
   openAuthModal("Sesión cerrada.");
@@ -1721,8 +1624,6 @@ async function bootstrapAuth() {
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
-    $("tabHistory").style.display = isAdmin ? "" : "none";
-    if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = isAdmin ? "" : "none";
     
     // Mis registros visible para cualquier suscriptor autenticado
     $("tabMyRecords").style.display = "";
@@ -1745,8 +1646,6 @@ async function bootstrapAuth() {
     $("btnLogout").style.display = "none";
     $("tabAdmin").style.display = "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
-    $("tabHistory").style.display = "none";
-    if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = "none";
     $("tabMyRecords").style.display = "none";
     if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
     
@@ -2653,29 +2552,137 @@ function daysLeft(expires_at) {
 
 async function loadAdminUsers() {
   if (state.user?.role !== "admin") return;
-  const data = await apiFetch("/api/admin/users", { method: "GET" });
+  
+  let data = { users: [] };
+  try {
+    data = await apiFetch("/api/admin/users", { method: "GET" }) || { users: [] };
+  } catch (e) {
+    console.error("No se pudieron cargar usuarios admin:", e);
+  }
+
+  // Fetch audits to match subscribers with their latest connection info and online status
+  let audits = [];
+  try {
+    const rawHistory = await apiFetch("/api/admin/history", { method: "GET" });
+    if (Array.isArray(rawHistory)) {
+      audits = rawHistory;
+    } else if (rawHistory && Array.isArray(rawHistory.audits)) {
+      audits = rawHistory.audits;
+    } else if (rawHistory && Array.isArray(rawHistory.history)) {
+      audits = rawHistory.history;
+    } else if (rawHistory && Array.isArray(rawHistory.data)) {
+      audits = rawHistory.data;
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar el historial de auditoría para mapear conexiones:", e);
+  }
+
+  // Map user email (trimmed lowercase) to their latest activity
+  const activityMap = {};
+  if (Array.isArray(audits)) {
+    audits.forEach((item) => {
+      if (!item || !item.user) return;
+      const emailKey = String(item.user).trim().toLowerCase();
+      const itemTime = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+      if (!activityMap[emailKey] || itemTime > new Date(activityMap[emailKey].timestamp).getTime()) {
+        activityMap[emailKey] = item;
+      }
+    });
+  }
+
   const tbody = $("adminUsersTbody");
   if (!tbody) return;
   const users = data.users || [];
+  
   tbody.innerHTML = users
     .map((u) => {
       const exp = u.expires_at || "";
       const active = Number(u.is_active) === 1;
+      const emailKey = String(u.email).trim().toLowerCase();
+      const latestAudit = activityMap[emailKey];
+
+      // Expiración string
+      const left = daysLeft(exp);
+      let expColor = "var(--text)";
+      if (left === "Expirado") expColor = "var(--bad)";
+      else if (left === "∞") expColor = "var(--ok)";
+      else if (parseInt(left) <= 5) expColor = "var(--accent)";
+
+      // Connection Info
+      let connectionInfoHtml = `<span style="color:var(--muted)">Sin actividad registrada</span>`;
+      let isOnline = false;
+
+      if (latestAudit) {
+        const auditTime = new Date(latestAudit.timestamp).getTime();
+        const diffMs = Date.now() - auditTime;
+        
+        // 15 minutes threshold for Online status
+        if (diffMs < 15 * 60 * 1000) {
+          isOnline = true;
+        }
+
+        const formattedTime = new Date(latestAudit.timestamp).toLocaleString("es-ES", {
+          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+
+        // Parse country and device
+        const tz = latestAudit.sec_timezone || "Desconocida";
+        const browser = latestAudit.sec_ua || "Web Browser";
+        
+        connectionInfoHtml = `
+          <div style="font-size:12px; font-weight: 600;">${formattedTime}</div>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;" class="mono">
+            🌍 ${escapeHtml(tz)} <br/>
+            📱 ${escapeHtml(browser)}
+          </div>
+        `;
+      }
+
+      // Render Connection Status Badge
+      let statusBadgeHtml = "";
+      if (!active) {
+        statusBadgeHtml = `<span class="badge" style="background: rgba(255,90,106,0.15); color: var(--bad); font-size:11px;">● Desactivado</span>`;
+      } else if (left === "Expirado") {
+        statusBadgeHtml = `<span class="badge" style="background: rgba(255,160,0,0.15); color: #ffa000; font-size:11px;">● Expirado</span>`;
+      } else if (isOnline) {
+        statusBadgeHtml = `
+          <span class="badge" style="background: rgba(46,204,113,0.15); color: var(--ok); font-size:11px; display:inline-flex; align-items:center; gap:4px;">
+            <span class="pulse-dot" style="width:7px; height:7px; background:var(--ok); margin:0;"></span> En línea
+          </span>`;
+      } else {
+        // Active but offline
+        statusBadgeHtml = `<span class="badge" style="background: rgba(255,255,255,0.05); color: var(--muted); font-size:11px;">● Offline</span>`;
+      }
+
+      // Compact email, plan and role display
+      const roleBadge = u.role === "admin" 
+        ? `<span class="badge" style="background:rgba(230,126,34,0.2); color:#e67e22; font-size:9px; padding:2px 4px; border-radius:4px; margin-left:4px;">Admin</span>`
+        : "";
+      const planBadge = `<span class="badge" style="background:rgba(78,161,255,0.15); color:var(--accent); font-size:9px; padding:2px 4px; border-radius:4px; margin-left:4px; text-transform:uppercase;">${escapeHtml(u.plan || "free")}</span>`;
+
       return `<tr>
-        <td class="mono">${u.id}</td>
-        <td>${escapeHtml(u.email)}</td>
-        <td class="mono">${escapeHtml(u.role)}</td>
-        <td class="mono">${escapeHtml(u.plan)}</td>
-        <td class="mono">${escapeHtml(exp)}</td>
-        <td class="mono">${daysLeft(exp)}</td>
-
-        <td class="mono">${active ? "1" : "0"}</td>
+        <td class="mono" style="font-size:11px; color:var(--muted)">${u.id}</td>
         <td>
-          <button class="btn xs" data-action="reset" data-id="${u.id}">Reset</button>
-          <button class="btn xs" data-action="toggle" data-id="${u.id}" data-active="${active ? "1":"0"}">${active ? "Desactivar":"Activar"}</button>
-          <button class="btn xs" data-action="delete" data-id="${u.id}">Eliminar</button>
+          <div style="font-weight:600; font-size:13px;">${escapeHtml(u.email)}</div>
+          <div style="margin-top:4px; display:flex; gap:2px;">
+            ${planBadge} ${roleBadge}
+          </div>
         </td>
-
+        <td class="mono" style="font-size:12px;">
+          <div style="color:${expColor}; font-weight:700;">${daysLeft(exp)}</div>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;">${exp ? exp.split("T")[0] : "Ilimitada"}</div>
+        </td>
+        <td>${connectionInfoHtml}</td>
+        <td>${statusBadgeHtml}</td>
+        <td>
+          <div style="display:flex; flex-direction:column; gap:4px; max-width:110px;">
+            <button class="btn xs" data-action="reset" data-id="${u.id}" style="padding: 4px 8px; font-size:11px;">Reset clave</button>
+            <button class="btn xs" data-action="toggle" data-id="${u.id}" data-active="${active ? "1":"0"}" style="padding: 4px 8px; font-size:11px;">
+              ${active ? "Desactivar" : "Activar"}
+            </button>
+            <button class="btn xs secondary" data-action="delete" data-id="${u.id}" style="padding: 4px 8px; font-size:11px; color:var(--bad); border-color:rgba(255,90,106,0.15);">Eliminar</button>
+          </div>
+        </td>
       </tr>`;
     })
     .join("");

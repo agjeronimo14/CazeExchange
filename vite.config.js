@@ -10,6 +10,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         ws: true,
+        cookieDomainRewrite: "",
         headers: {
           // Ensure host header is rewritten to target
           host: 'cazeexchange.pages.dev'
