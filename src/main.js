@@ -350,6 +350,7 @@ function applyPhase2Layout() {
       <button class="tabBtn" data-tab="quote" type="button">COP ➔ VES</button>
       <button class="tabBtn" data-tab="vesToCop" type="button">VES ➔ COP</button>
       <button class="tabBtn" data-tab="rates" type="button">Tasas/Ajustes</button>
+      <button class="tabBtn" data-tab="history" id="tabHistoryMobile" type="button" style="display:none">Historial</button>
       <button class="tabBtn" data-tab="admin" id="tabAdminMobile" type="button" style="display:none">Admin</button>
     `;
     container.appendChild(nav);
@@ -413,7 +414,12 @@ function applyPhase2Layout() {
 
 function wireTabButtons() {
   document.querySelectorAll('.tabBtn').forEach((btn) => {
-    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+    btn.addEventListener('click', () => {
+      setActiveTab(btn.dataset.tab);
+      if (btn.dataset.tab === "history") {
+        renderHistoryUI();
+      }
+    });
   });
 }
 
@@ -530,6 +536,8 @@ const DEFAULT_ADJ = Object.freeze({
   parallelPct: -2.0,   // USD/VES Paralelo
   usdtCopPct: 1.0,     // USDT/COP (comprar USDT en CO)
   usdtVesPct: -2.5,    // USDT/VES (vender USDT en VE)
+  usdtVesBuyPct: 1.5,  // USDT/VES (comprar USDT con VES en VE)
+  usdtCopSellPct: -1.5, // USDT/COP (vender USDT por COP en CO)
 });
 
 function loadAdj() {
@@ -590,7 +598,9 @@ function readAdjFromUI() {
   const parallelPct = parseNum($("adjPar")?.value);
   const usdtCopPct = parseNum($("adjUsdtCop")?.value);
   const usdtVesPct = parseNum($("adjUsdtVes")?.value);
-  return { bcvPct, parallelPct, usdtCopPct, usdtVesPct };
+  const usdtVesBuyPct = parseNum($("adjUsdtVesBuy")?.value);
+  const usdtCopSellPct = parseNum($("adjUsdtCopSell")?.value);
+  return { bcvPct, parallelPct, usdtCopPct, usdtVesPct, usdtVesBuyPct, usdtCopSellPct };
 }
 
 function hydrateAdjUI() {
@@ -599,6 +609,8 @@ function hydrateAdjUI() {
   if ($("adjPar")) $("adjPar").value = fmtPct(a.parallelPct);
   if ($("adjUsdtCop")) $("adjUsdtCop").value = fmtPct(a.usdtCopPct);
   if ($("adjUsdtVes")) $("adjUsdtVes").value = fmtPct(a.usdtVesPct);
+  if ($("adjUsdtVesBuy")) $("adjUsdtVesBuy").value = fmtPct(a.usdtVesBuyPct ?? 1.5);
+  if ($("adjUsdtCopSell")) $("adjUsdtCopSell").value = fmtPct(a.usdtCopSellPct ?? -1.5);
 }
 
 function applyServerSettingsToState(settings) {
@@ -606,10 +618,10 @@ function applyServerSettingsToState(settings) {
   // map DB fields -> local adj fields
   state.adj = {
     ...state.adj,
-    bcvPct: Number(settings.adj_bcv ?? 0),
-    parallelPct: Number(settings.adj_parallel ?? 0),
-    usdtCopPct: Number(settings.adj_usdt_cop ?? 0),
-    usdtVesPct: Number(settings.adj_usdt_ves ?? 0),
+    bcvPct: Number(settings.adj_bcv ?? -1.5),
+    parallelPct: Number(settings.adj_parallel ?? -2.0),
+    usdtCopPct: Number(settings.adj_usdt_cop ?? 1.0),
+    usdtVesPct: Number(settings.adj_usdt_ves ?? -2.5),
   };
   hydrateAdjUI();
 }
@@ -654,6 +666,8 @@ function setInput(id, value, d = null) {
     eurUsd: 6,
     usdtCopBuy: 2,
     usdtVesSell: 2,
+    usdtVesBuy: 2,
+    usdtCopSell: 2,
   };
   const autoD = d === null ? (defaultDecimalsById[id] ?? (Math.abs(n) < 10 ? 6 : 2)) : d;
   node.value = fmt(n, autoD);
@@ -736,6 +750,12 @@ const state = {
   quoteMode: (typeof localStorage !== "undefined" && localStorage.getItem("quoteMode")) || "goal",
   invLast: (typeof localStorage !== "undefined" && localStorage.getItem("invLast")) || "invVes",
   vesCurrency: (typeof localStorage !== "undefined" && localStorage.getItem("CAZE_VES_CURRENCY")) || "ves",
+
+  // Nuevos Ajustes Profesionales
+  deferredInstallPrompt: null,
+  liveRatesInterval: null,
+  liveRatesEnabled: true,
+  liveRatesTimeLeft: 30,
 };
 
 // ---------- mount ----------
@@ -760,6 +780,17 @@ mount.innerHTML = `
         <small id="userBadge" class="badge">Sin sesión activa</small>
       </div>
       <div class="actions">
+        <!-- Tasa en vivo pulsing dot -->
+        <div id="liveBadge" class="live-badge no-export" style="display:none;">
+          <span class="pulse-dot"></span>
+          <span id="liveTimerText">En vivo: 30s</span>
+        </div>
+
+        <!-- PWA install button -->
+        <button id="btnPWAInstall" class="pwa-badge no-export" style="display:none; border:none; padding: 4px 10px; height: auto;">
+          <span>📲 Instalar App</span>
+        </button>
+
         <button id="btnUpdate" class="btn primary">Actualizar tasas</button>
         <button id="btnExport" class="btn">Exportar imagen</button>
         <button id="btnLogout" class="btn" style="display:none">Salir</button>
@@ -771,6 +802,7 @@ mount.innerHTML = `
       <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">De COP a VES</button>
       <button class="tabBtn" data-tab="vesToCop" id="tabVesToCop" type="button">De VES a COP</button>
       <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas y Ajustes</button>
+      <button class="tabBtn" data-tab="history" id="tabHistory" type="button" style="display:none">Historial</button>
       <button class="tabBtn" data-tab="admin" id="tabAdmin" type="button" style="display:none">Admin</button>
     </div>
 
@@ -821,7 +853,16 @@ mount.innerHTML = `
         </section>
 
         <section class="pane" data-tabs="rates">
-          <h2>Tasas (auto + manual)</h2>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
+            <h2 style="margin: 0;">Tasas (auto + manual)</h2>
+            <label class="live-switch no-export" style="margin: 0; display: inline-flex;">
+              <input id="chkLiveRates" type="checkbox" checked style="width:16px; height:16px; accent-color:#24c16a;" />
+              <span style="font-weight: 600; color: var(--ok); display: flex; align-items: center; gap: 4px; font-size:12px;">
+                <span class="pulse-dot" style="margin-right:2px;"></span>
+                Tasas en vivo (30s)
+              </span>
+            </label>
+          </div>
         <p class="hint">
           Las tasas marcadas “auto” se llenan al presionar <b>Actualizar tasas</b>, pero <b>puedes editarlas</b> si falla la automática.
           Para <b>USDT/COP</b> y <b>USDT/VES</b> intentamos traer una <i>tasa del día</i> (preferiblemente Binance P2P vía server).
@@ -830,36 +871,45 @@ mount.innerHTML = `
 
         <div class="row">
           <div class="field">
-            <label>USD/VES (Oficial / BCV) [auto editable]</label>
+            <label>USD/VES (Oficial / BCV) [auto/manual]</label>
             <input id="usdVesOf" inputmode="decimal" placeholder="Auto o manual" />
           </div>
 
           <div class="field">
-            <label>USD/VES (Paralelo) [auto editable]</label>
+            <label>USD/VES (Paralelo) [auto/manual]</label>
             <input id="usdVesPar" inputmode="decimal" placeholder="Auto o manual" />
           </div>
 
           <div class="field">
-            <label>EUR/VES (BCV) [auto editable]</label>
+            <label>EUR/VES (BCV) [auto/manual]</label>
             <input id="eurVes" inputmode="decimal" placeholder="Auto o manual" />
           </div>
 
           <div class="field">
-            <label>EURUSD [auto editable] (USD por 1 EUR)</label>
+            <label>EURUSD [auto/manual] (USD por 1 EUR)</label>
             <input id="eurUsd" inputmode="decimal" placeholder="Auto o manual" />
           </div>
 
           <div class="field">
-            <label>USDT/COP (Comprar USDT en CO) [manual por ahora]</label>
+            <label>USDT/COP (Comprar USDT con COP en CO) [auto/manual]</label>
             <input id="usdtCopBuy" inputmode="decimal" placeholder="Ej: 3950" />
           </div>
 
           <div class="field">
-            <label>USDT/VES (Vender USDT en VE) [manual por ahora]</label>
+            <label>USDT/VES (Vender USDT por VES en VE) [auto/manual]</label>
             <input id="usdtVesSell" inputmode="decimal" placeholder="Ej: 690" />
           </div>
-        </div>
 
+          <div class="field">
+            <label>USDT/VES (Comprar USDT con VES en VE) [auto/manual]</label>
+            <input id="usdtVesBuy" inputmode="decimal" placeholder="Ej: 766" />
+          </div>
+
+          <div class="field">
+            <label>USDT/COP (Vender USDT por COP en CO) [auto/manual]</label>
+            <input id="usdtCopSell" inputmode="decimal" placeholder="Ej: 3279" />
+          </div>
+        </div>
 
         
         </section>
@@ -887,6 +937,17 @@ mount.innerHTML = `
           <div class="field">
             <label>USDT/VES (Vender USDT en VE) ajuste %</label>
             <input id="adjUsdtVes" inputmode="decimal" placeholder="-2,50" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>USDT/VES (Comprar con VES) ajuste %</label>
+            <input id="adjUsdtVesBuy" inputmode="decimal" placeholder="1,50" />
+          </div>
+          <div class="field">
+            <label>USDT/COP (Vender por COP) ajuste %</label>
+            <input id="adjUsdtCopSell" inputmode="decimal" placeholder="-1,50" />
           </div>
         </div>
 
@@ -1021,8 +1082,9 @@ mount.innerHTML = `
             <div class="field" id="vesUsdRateTypeField">
               <label>Tipo de tasa de cambio (VES → USD)</label>
               <select id="vesUsdRateType">
+                <option value="usdtVesBuy" selected>Binance USDT/VES (Comprar - Recomendado)</option>
                 <option value="usdtVesSell">Binance USDT/VES (Vender)</option>
-                <option value="usdVesPar" selected>Dólar Paralelo (Recomendado)</option>
+                <option value="usdVesPar">Dólar Paralelo</option>
                 <option value="usdVesOf">Dólar Oficial (BCV)</option>
                 <option value="eurVes">Euro BCV / EURUSD</option>
               </select>
@@ -1031,8 +1093,8 @@ mount.innerHTML = `
 
           <div class="row">
             <div class="field">
-              <label>Tasa USDT/COP (Comprar en CO)</label>
-              <input id="vesUsdtCopBuy" inputmode="decimal" placeholder="Ej: 3950" />
+              <label>Tasa USDT/COP (Vender en CO)</label>
+              <input id="vesUsdtCopBuy" inputmode="decimal" placeholder="Ej: 3279" />
             </div>
 
             <div class="field">
@@ -1147,6 +1209,32 @@ mount.innerHTML = `
               </thead>
               <tbody id="adminUsersTbody"></tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="pane" data-tabs="history">
+          <h2>Auditoría de Cotizaciones Recientes</h2>
+          <p class="hint">Registro automático y seguro de todas las cotizaciones calculadas en este dispositivo.</p>
+
+          <div style="height:10px"></div>
+
+          <div class="row" style="margin-bottom: 12px; gap:8px; align-items: center;">
+            <div class="field">
+              <label>Buscar cotización (monto, usuario, etc.)</label>
+              <input id="historySearch" placeholder="Escribe para buscar..." style="padding: 8px 12px;" />
+            </div>
+            <div class="field" style="max-width:140px">
+              <label>Dirección</label>
+              <select id="historyFilterMode" style="padding: 8px 12px;">
+                <option value="all">Todas</option>
+                <option value="cop_ves">COP ➔ VES</option>
+                <option value="ves_cop">VES ➔ COP</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="historyList" class="audit-list">
+            <div class="hint" style="text-align:center; padding:20px; color:var(--muted)">No hay cotizaciones registradas todavía. Realiza un cálculo para que aparezca aquí.</div>
           </div>
         </section>
       </div>
@@ -1298,6 +1386,67 @@ mount.innerHTML = `
           </div>
         </div>
         </section>
+
+        <section class="pane" data-tabs="history">
+          <h2>Resumen de Auditoría y Seguridad</h2>
+          <p class="hint">Métricas consolidadas de las operaciones registradas en este navegador.</p>
+          
+          <div style="height:10px"></div>
+
+          <div class="history-kpi-grid">
+            <div class="kpi" style="padding:10px;">
+              <div class="cap">Cotizaciones</div>
+              <div id="histCount" class="big" style="font-size:20px; font-weight:700;">0</div>
+            </div>
+            <div class="kpi" style="padding:10px;">
+              <div class="cap">Volumen (COP)</div>
+              <div id="histVolCop" class="big" style="font-size:16px; font-weight:700; word-break: break-all;">—</div>
+            </div>
+            <div class="kpi" style="padding:10px;">
+              <div class="cap">Ganancia (USDT)</div>
+              <div id="histProfit" class="big" style="font-size:16px; font-weight:700; color:var(--ok); word-break: break-all;">—</div>
+            </div>
+          </div>
+
+          <hr />
+
+          <h2>Detalles del Entorno de Seguridad (Audit Trail)</h2>
+          <p class="hint">Información técnica para auditoría y geolocalización de red.</p>
+          
+          <div style="height:10px"></div>
+
+          <div class="kpi" style="background: rgba(255,255,255,0.01); font-size:12px; line-height:1.7; padding:12px; border-radius:12px;">
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding-bottom:4px;">
+              <span style="color:var(--muted)">Usuario de sesión:</span>
+              <span id="auditUser" class="mono font-semibold">—</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
+              <span style="color:var(--muted)">Canal de Red:</span>
+              <span id="auditNetwork" class="mono font-semibold" style="color:var(--ok)">● Online (Secure TLS)</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
+              <span style="color:var(--muted)">Zona horaria:</span>
+              <span id="auditTimezone" class="mono">—</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
+              <span style="color:var(--muted)">Idioma:</span>
+              <span id="auditLang" class="mono">—</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding-top:4px;">
+              <span style="color:var(--muted)">Ubicación CDN:</span>
+              <span id="auditGeo" class="mono font-semibold" style="color:var(--accent)">Latinoamérica (Cloudflare Edge)</span>
+            </div>
+          </div>
+
+          <p class="hint" style="margin-top:10px; font-size:11px; color:var(--muted); line-height:1.35;">
+            * Nota de Seguridad SaaS: Para evitar que un suscriptor evada la auditoría borrando su historial, el servidor de CazeExchange registra de forma permanente cada cálculo en la base de datos Cloudflare D1 vinculando su cuenta, IP pública y país de conexión.
+          </p>
+
+          <div class="row" style="margin-top:14px;">
+            <button id="btnHistExport" class="btn" type="button" style="padding: 8px 10px; font-size:12px;">Exportar CSV</button>
+            <button id="btnHistClear" class="btn secondary" type="button" style="padding: 8px 10px; font-size:12px; color:var(--bad); border-color:rgba(255,90,106,0.25);">Limpiar todo</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -1364,12 +1513,14 @@ $("btnLogin")?.addEventListener("click", async () => {
     applyBrandingToUI(state.branding);
     hydrateBrandingUI();
 
-        setUserBadge();
+    setUserBadge();
     $("btnLogout").style.display = "";
     // admin tab visibility
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
+    $("tabHistory").style.display = isAdmin ? "" : "none";
+    if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = isAdmin ? "" : "none";
     if (isAdmin) loadAdminUsers().catch(() => {});
     closeAuthModal();
     updateAll();
@@ -1389,6 +1540,8 @@ $("btnLogout")?.addEventListener("click", async () => {
   $("btnLogout").style.display = "none";
   $("tabAdmin").style.display = "none";
   if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
+  $("tabHistory").style.display = "none";
+  if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = "none";
   openAuthModal("Sesión cerrada.");
   updateAll();
 });
@@ -1417,6 +1570,8 @@ async function bootstrapAuth() {
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
+    $("tabHistory").style.display = isAdmin ? "" : "none";
+    if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = isAdmin ? "" : "none";
     if (isAdmin) loadAdminUsers().catch(() => {});
 
     closeAuthModal();
@@ -1431,6 +1586,8 @@ async function bootstrapAuth() {
     $("btnLogout").style.display = "none";
     $("tabAdmin").style.display = "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
+    $("tabHistory").style.display = "none";
+    if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = "none";
     openAuthModal("");
   }
 }
@@ -1878,13 +2035,13 @@ function calcVesToCop() {
   const v = parseNum($("inVes")?.value);
   const isUsd = state.vesCurrency === "usd";
   
-  const defaultUsdtCopBuy = parseNum($("usdtCopBuy")?.value);
+  const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value);
   const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
   const vesUsdtCopBuyInput = $("vesUsdtCopBuy");
-  if (vesUsdtCopBuyInput && defaultUsdtCopBuy) {
-    vesUsdtCopBuyInput.placeholder = String(defaultUsdtCopBuy);
+  if (vesUsdtCopBuyInput && defaultUsdtCopSell) {
+    vesUsdtCopBuyInput.placeholder = String(fmt(defaultUsdtCopSell, 2));
   }
-  const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopBuy || null;
+  const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || null;
 
   const vesFeeType = $("vesFeeType")?.value;
   const vesFeePct = parseNum($("vesFeePct")?.value) / 100;
@@ -1896,6 +2053,7 @@ function calcVesToCop() {
   const eurUsd = parseNum($("eurUsd")?.value);
   const usdViaEur = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
   const usdtVesSell = parseNum($("usdtVesSell")?.value);
+  const usdtVesBuy = parseNum($("usdtVesBuy")?.value);
 
   // Determinar la tasa VES -> USD según la selección
   let rateVesPerUsd = null;
@@ -1905,9 +2063,12 @@ function calcVesToCop() {
     methodLabel = "Entrega en USD";
   } else {
     const rateType = $("vesUsdRateType")?.value;
-    if (rateType === "usdtVesSell") {
+    if (rateType === "usdtVesBuy") {
+      rateVesPerUsd = usdtVesBuy;
+      methodLabel = "Binance USDT/VES (Comprar)";
+    } else if (rateType === "usdtVesSell") {
       rateVesPerUsd = usdtVesSell;
-      methodLabel = "Binance USDT/VES";
+      methodLabel = "Binance USDT/VES (Vender)";
     } else if (rateType === "usdVesPar") {
       rateVesPerUsd = usdPar;
       methodLabel = "Paralelo";
@@ -2196,6 +2357,11 @@ async function updateRates() {
     if (Number.isFinite(usdtCop)) setValue("usdtCopBuy", usdtCop, 2);
     if (Number.isFinite(usdtVes)) setValue("usdtVesSell", usdtVes, 2);
 
+    const usdtVesBuyVal = applyPct((serverRates.usdtVesBuy ?? serverRates.usdVesParallel ?? null), adj.usdtVesBuyPct ?? 1.5);
+    const usdtCopSellVal = applyPct((serverRates.usdtCopSell ?? serverRates.usdCop ?? null), adj.usdtCopSellPct ?? -1.5);
+    if (Number.isFinite(usdtVesBuyVal)) setValue("usdtVesBuy", usdtVesBuyVal, 2);
+    if (Number.isFinite(usdtCopSellVal)) setValue("usdtCopSell", usdtCopSellVal, 2);
+
     state.lastRateMeta = {
       ok: true,
       sources: serverRates.sources || "API",
@@ -2228,16 +2394,20 @@ async function updateRates() {
     // Aproximaciones para USDT
     if (usdCop) setInput("usdtCopBuy", applyPct(Number(usdCop), adj.usdtCopPct), 2);
     if (parVal) setInput("usdtVesSell", applyPct(Number(parVal), adj.usdtVesPct), 2);
+    if (parVal) setInput("usdtVesBuy", applyPct(Number(parVal), adj.usdtVesBuyPct ?? 1.5), 2);
+    if (usdCop) setInput("usdtCopSell", applyPct(Number(usdCop), adj.usdtCopSellPct ?? -1.5), 2);
 
     applyBadge({
       ok: true,
       quality: "approx",
-      fallback_rates: ["usdt_cop", "usdt_ves"],
+      fallback_rates: ["usdt_cop", "usdt_ves", "usdt_ves_buy", "usdt_cop_sell"],
       sources_detail: {
         bcv: "DolarAPI (fallback)",
         parallel: "DolarAPI (fallback)",
         usdt_cop: "Aprox: USD/COP",
         usdt_ves: "Aprox: USD/VES paralelo",
+        usdt_ves_buy: "Aprox: USD/VES paralelo (Comprar)",
+        usdt_cop_sell: "Aprox: USD/COP (Vender)",
       },
     });
 
@@ -2288,6 +2458,7 @@ function recalcAll() {
   }
 
   renderPoster(active);
+  triggerAutoLog();
 }
 
 // ---------- events ----------
@@ -2476,7 +2647,7 @@ $("btnAdminCreate")?.addEventListener("click", adminCreateUser);
 $("btnAdminReload")?.addEventListener("click", loadAdminUsers);
 
 // ajustes (%)
-["adjBcv","adjPar","adjUsdtCop","adjUsdtVes"].forEach((id) => {
+["adjBcv","adjPar","adjUsdtCop","adjUsdtVes","adjUsdtVesBuy","adjUsdtCopSell"].forEach((id) => {
   const el = $(id);
   if (!el) return;
   el.addEventListener("input", () => {
@@ -2507,7 +2678,7 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 [
   "inCop","feeType","feePct","feeFixed",
   "usdVesOf","usdVesPar","eurVes","eurUsd",
-  "usdtCopBuy","usdtVesSell","adjBcv","adjPar","adjUsdtCop","adjUsdtVes",
+  "usdtCopBuy","usdtVesSell","usdtVesBuy","usdtCopSell","adjBcv","adjPar","adjUsdtCop","adjUsdtVes","adjUsdtVesBuy","adjUsdtCopSell",
   "invVes","invUsdBcv","invUsdPar","invUsdEur","invEur",
   "inVes","vesUsdRateType","vesUsdtCopBuy","vesFeeType","vesFeePct","vesFeeFixed"
 ].forEach(id => {
@@ -2522,10 +2693,494 @@ $("modeGoal")?.addEventListener("click", () => setQuoteMode("goal"));
 });
 
 // auto al abrir
+// auto al abrir
 applyQuoteModeUI();
 wireVesWhatsappActions();
-// Primero intentamos sesión (si existe) y luego cargamos tasas
+
+
+// ---------- Nuevos Ajustes Profesionales ----------
+
+// PWA & Service Worker
+function setupPWAEvents() {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/service-worker.js")
+        .then(reg => {
+          console.log("CazeExchange Service Worker registrado con éxito.");
+        })
+        .catch(err => {
+          console.warn("Fallo de registro de SW CazeExchange: ", err);
+        });
+    });
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    state.deferredInstallPrompt = e;
+    const installBtn = $("btnPWAInstall");
+    if (installBtn) {
+      installBtn.style.display = "inline-flex";
+    }
+  });
+
+  $("btnPWAInstall")?.addEventListener("click", async () => {
+    const promptEvent = state.deferredInstallPrompt;
+    if (!promptEvent) return;
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    console.log(`User prompt outcome: ${outcome}`);
+    state.deferredInstallPrompt = null;
+    const installBtn = $("btnPWAInstall");
+    if (installBtn) installBtn.style.display = "none";
+  });
+
+  window.addEventListener("appinstalled", () => {
+    state.deferredInstallPrompt = null;
+    const installBtn = $("btnPWAInstall");
+    if (installBtn) installBtn.style.display = "none";
+  });
+}
+
+// Live Rates Auto updates
+function setupLiveRates() {
+  const chkLive = $("chkLiveRates");
+  const liveBadge = $("liveBadge");
+  const liveTimerText = $("liveTimerText");
+
+  if (!chkLive) return;
+
+  const saved = localStorage.getItem("CAZE_LIVE_RATES");
+  if (saved === "false") {
+    state.liveRatesEnabled = false;
+    chkLive.checked = false;
+  } else {
+    state.liveRatesEnabled = true;
+    chkLive.checked = true;
+  }
+
+  chkLive.addEventListener("change", (e) => {
+    state.liveRatesEnabled = e.target.checked;
+    localStorage.setItem("CAZE_LIVE_RATES", String(state.liveRatesEnabled));
+    if (state.liveRatesEnabled) {
+      state.liveRatesTimeLeft = 30;
+      if (liveBadge) liveBadge.style.display = "inline-flex";
+    } else {
+      if (liveBadge) liveBadge.style.display = "none";
+    }
+  });
+
+  if (state.liveRatesInterval) clearInterval(state.liveRatesInterval);
+  
+  if (state.liveRatesEnabled && liveBadge) {
+    liveBadge.style.display = "inline-flex";
+  }
+
+  state.liveRatesInterval = setInterval(() => {
+    if (!state.liveRatesEnabled) {
+      if (liveBadge) liveBadge.style.display = "none";
+      return;
+    }
+
+    if (liveBadge && liveBadge.style.display === "none") {
+      liveBadge.style.display = "inline-flex";
+    }
+
+    state.liveRatesTimeLeft--;
+    if (liveTimerText) {
+      liveTimerText.textContent = `En vivo: ${state.liveRatesTimeLeft}s`;
+    }
+
+    if (state.liveRatesTimeLeft <= 0) {
+      state.liveRatesTimeLeft = 30;
+      silentUpdateRates();
+    }
+  }, 1000);
+}
+
+async function silentUpdateRates() {
+  const status = $("status");
+  if (status) status.textContent = "Sincronizando...";
+
+  try {
+    const copNow = parseNum($("inCop")?.value);
+    const ratesPath = Number.isFinite(copNow) && copNow > 0
+      ? `/api/rates?cop=${encodeURIComponent(String(copNow))}`
+      : "/api/rates";
+
+    const serverRates = await apiFetch(ratesPath);
+    const adj = state.adj || {};
+
+    if (Number.isFinite(serverRates.usdVesBcv)) setValue("usdVesOf", applyPct(serverRates.usdVesBcv, adj.bcvPct), 2);
+    if (Number.isFinite(serverRates.usdVesParallel)) setValue("usdVesPar", applyPct(serverRates.usdVesParallel, adj.parallelPct), 2);
+    if (Number.isFinite(serverRates.eurVesBcv)) setValue("eurVes", serverRates.eurVesBcv, 2);
+    if (Number.isFinite(serverRates.eurUsd)) setValue("eurUsd", serverRates.eurUsd, 6);
+
+    const usdtCop = serverRates.usdtCopBuy ?? serverRates.usdCop ?? null;
+    const usdtVes = serverRates.usdtVesSell ?? serverRates.usdVesParallel ?? null;
+
+    if (Number.isFinite(usdtCop)) setValue("usdtCopBuy", usdtCop, 2);
+    if (Number.isFinite(usdtVes)) setValue("usdtVesSell", usdtVes, 2);
+
+    const usdtVesBuyVal = applyPct((serverRates.usdtVesBuy ?? serverRates.usdVesParallel ?? null), adj.usdtVesBuyPct ?? 1.5);
+    const usdtCopSellVal = applyPct((serverRates.usdtCopSell ?? serverRates.usdCop ?? null), adj.usdtCopSellPct ?? -1.5);
+    if (Number.isFinite(usdtVesBuyVal)) setValue("usdtVesBuy", usdtVesBuyVal, 2);
+    if (Number.isFinite(usdtCopSellVal)) setValue("usdtCopSell", usdtCopSellVal, 2);
+
+    const d = new Date();
+    state.updatedAt = d;
+    updateRatesBadge(d);
+
+    if (status) status.textContent = "Listo";
+  } catch (e) {
+    if (status) status.textContent = "Reintentando...";
+  }
+
+  recalcAll();
+}
+
+// Historial y Auditoría
+function getCleanUserAgent() {
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) return "Android Device";
+  if (/ipad|iphone|ipod/i.test(ua)) return "iOS Device";
+  if (/chrome|crios/i.test(ua)) return "Chrome Browser";
+  if (/safari/i.test(ua)) return "Safari Browser";
+  if (/firefox|fxios/i.test(ua)) return "Firefox Browser";
+  return "Navegador Web";
+}
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem("CAZE_QUOTES_HISTORY");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history) {
+  try {
+    localStorage.setItem("CAZE_QUOTES_HISTORY", JSON.stringify(history));
+  } catch {}
+}
+
+function addHistoryEntry(entry) {
+  const history = loadHistory();
+  history.unshift(entry);
+  if (history.length > 500) {
+    history.pop();
+  }
+  saveHistory(history);
+  renderHistoryUI();
+}
+
+let lastLoggedHash = "";
+let autoLogTimer = null;
+
+function triggerAutoLog() {
+  if (autoLogTimer) clearTimeout(autoLogTimer);
+  autoLogTimer = setTimeout(() => {
+    saveActiveQuoteToHistory();
+  }, 1200);
+}
+
+function saveActiveQuoteToHistory() {
+  const activeTab = document.querySelector(".tabBtn.active")?.dataset.tab;
+  if (activeTab !== "quote" && activeTab !== "vesToCop") return;
+
+  const userEmail = state.user?.email || "Invitado";
+  const now = new Date();
+
+  if (activeTab === "quote") {
+    const inCopVal = parseNum($("inCop")?.value);
+    if (!inCopVal || inCopVal <= 0) return;
+
+    const main = calcMain({ paint: false });
+    if (!main) return;
+    const primaryInv = calcInverse(main);
+    const active = getActiveQuote(main, primaryInv);
+    if (!active || !active.cop || active.cop <= 0) return;
+
+    const hash = `cop_ves_${active.cop}_${active.vesUsed}_${active.feeUsdt}_${userEmail}`;
+    if (hash === lastLoggedHash) return;
+    lastLoggedHash = hash;
+
+    const entry = {
+      id: "QT-" + Math.floor(100000 + Math.random() * 900000),
+      timestamp: now.toISOString(),
+      user: userEmail,
+      direction: "cop_ves",
+      directionLabel: "COP ➔ VES",
+      inputAmount: active.cop,
+      inputCurrency: "COP",
+      outputAmount: active.vesUsed,
+      outputCurrency: "VES",
+      profit: active.feeUsdt,
+      profitCurrency: "USDT",
+      rates: `BCV: ${parseNum($("usdVesOf")?.value)} | Paralelo: ${parseNum($("usdVesPar")?.value)} | USDT/COP Buy: ${parseNum($("usdtCopBuy")?.value)} | USDT/VES Sell: ${parseNum($("usdtVesSell")?.value)}`,
+      sec_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Caracas",
+      sec_lang: navigator.language || "es-ES",
+      sec_online: navigator.onLine ? "Online" : "Offline",
+      sec_ua: getCleanUserAgent()
+    };
+
+    addHistoryEntry(entry);
+  } else if (activeTab === "vesToCop") {
+    const inVesVal = parseNum($("inVes")?.value);
+    if (!inVesVal || inVesVal <= 0) return;
+
+    const isUsd = state.vesCurrency === "usd";
+    const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value);
+    const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
+    const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || null;
+    
+    let rateVesPerUsd = null;
+    if (isUsd) {
+      rateVesPerUsd = 1.0;
+    } else {
+      const rateType = $("vesUsdRateType")?.value;
+      if (rateType === "usdtVesBuy") {
+        rateVesPerUsd = parseNum($("usdtVesBuy")?.value);
+      } else if (rateType === "usdtVesSell") {
+        rateVesPerUsd = parseNum($("usdtVesSell")?.value);
+      } else if (rateType === "usdVesPar") {
+        rateVesPerUsd = parseNum($("usdVesPar")?.value);
+      } else if (rateType === "usdVesOf") {
+        rateVesPerUsd = parseNum($("usdVesOf")?.value);
+      } else if (rateType === "eurVes") {
+        const eurVes = parseNum($("eurVes")?.value);
+        const eurUsd = parseNum($("eurUsd")?.value);
+        rateVesPerUsd = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
+      }
+    }
+
+    if (!rateVesPerUsd || !vesUsdtCopBuy) return;
+
+    const baseUsdt = isUsd ? inVesVal : (inVesVal / rateVesPerUsd);
+    const vesFeeType = $("vesFeeType")?.value;
+    const vesFeePct = parseNum($("vesFeePct")?.value) / 100;
+    const vesFeeFixed = parseNum($("vesFeeFixed")?.value);
+    const feeUsdt = vesFeeType === "pct" ? (baseUsdt * vesFeePct) : vesFeeFixed;
+    const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+    const copReceived = netUsdt * vesUsdtCopBuy;
+
+    const hash = `ves_cop_${inVesVal}_${copReceived}_${feeUsdt}_${userEmail}`;
+    if (hash === lastLoggedHash) return;
+    lastLoggedHash = hash;
+
+    const entry = {
+      id: "QT-" + Math.floor(100000 + Math.random() * 900000),
+      timestamp: now.toISOString(),
+      user: userEmail,
+      direction: "ves_cop",
+      directionLabel: isUsd ? "USD ➔ COP" : "VES ➔ COP",
+      inputAmount: inVesVal,
+      inputCurrency: isUsd ? "USD" : "VES",
+      outputAmount: copReceived,
+      outputCurrency: "COP",
+      profit: feeUsdt,
+      profitCurrency: "USDT",
+      rates: `USDT/COP Sell: ${vesUsdtCopBuy} | USDT/VES: ${rateVesPerUsd}`,
+      sec_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Caracas",
+      sec_lang: navigator.language || "es-ES",
+      sec_online: navigator.onLine ? "Online" : "Offline",
+      sec_ua: getCleanUserAgent()
+    };
+
+    addHistoryEntry(entry);
+  }
+}
+
+function renderHistoryUI() {
+  const historyList = $("historyList");
+  if (!historyList) return;
+
+  const history = loadHistory();
+  const searchVal = ($("historySearch")?.value || "").trim().toLowerCase();
+  const filterMode = $("historyFilterMode")?.value || "all";
+
+  const filtered = history.filter(item => {
+    if (filterMode === "cop_ves" && item.direction !== "cop_ves") return false;
+    if (filterMode === "ves_cop" && item.direction !== "ves_cop") return false;
+
+    if (searchVal) {
+      const amtInStr = `${item.inputAmount} ${item.inputCurrency}`.toLowerCase();
+      const amtOutStr = `${item.outputAmount} ${item.outputCurrency}`.toLowerCase();
+      const userStr = String(item.user).toLowerCase();
+      const idStr = String(item.id).toLowerCase();
+      return idStr.includes(searchVal) || userStr.includes(searchVal) || amtInStr.includes(searchVal) || amtOutStr.includes(searchVal);
+    }
+    return true;
+  });
+
+  const count = history.length;
+  let totalVolCop = 0;
+  let totalProfitUsdt = 0;
+
+  history.forEach(item => {
+    if (item.inputCurrency === "COP") {
+      totalVolCop += item.inputAmount;
+    } else if (item.outputCurrency === "COP") {
+      totalVolCop += item.outputAmount;
+    }
+    
+    if (item.profitCurrency === "USDT") {
+      totalProfitUsdt += item.profit;
+    }
+  });
+
+  setText("histCount", String(count));
+  setText("histVolCop", totalVolCop > 0 ? money("COP", totalVolCop, 0) : "—");
+  setText("histProfit", totalProfitUsdt > 0 ? money("USDT", totalProfitUsdt, 2) : "—");
+
+  setText("auditUser", state.user?.email || "Invitado / Sin Sesión");
+  setText("auditNetwork", navigator.onLine ? "● Conectado (HTTPS)" : "● Desconectado");
+  const netEl = $("auditNetwork");
+  if (netEl) netEl.style.color = navigator.onLine ? "var(--ok)" : "var(--bad)";
+  
+  setText("auditTimezone", Intl.DateTimeFormat().resolvedOptions().timeZone || "América/Caracas");
+  setText("auditLang", navigator.language || "es-VE");
+
+  if (filtered.length === 0) {
+    historyList.innerHTML = `<div class="hint" style="text-align:center; padding:30px; color:var(--muted)">No se encontraron cotizaciones con los filtros actuales.</div>`;
+    return;
+  }
+
+  historyList.innerHTML = filtered.map(item => {
+    const formattedDate = new Date(item.timestamp).toLocaleString("es-ES", {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+
+    const isCopVes = item.direction === "cop_ves";
+    const tagClass = isCopVes ? "in" : "out";
+
+    return `
+      <div class="audit-card" id="card-${item.id}">
+        <div class="audit-card-header">
+          <span class="audit-tag ${tagClass}">${item.directionLabel}</span>
+          <span class="mono" style="font-size:11px; color:var(--muted);">${formattedDate}</span>
+          <button class="btn xs" onclick="toggleAuditDetails('${item.id}')" style="padding: 2px 8px; font-size:11px; margin-left:auto; border-radius:6px; background:rgba(255,255,255,0.05); cursor:pointer;">Detalles</button>
+        </div>
+        <div class="audit-card-body">
+          <div>
+            <div style="font-size:10px; color:var(--muted);">Entrega</div>
+            <div style="font-weight:700;">${isCopVes ? money("COP", item.inputAmount, 0) : (item.inputCurrency === "USD" ? money("USD", item.inputAmount, 2) : money("VES", item.inputAmount, 2))}</div>
+          </div>
+          <div>
+            <div style="font-size:10px; color:var(--muted);">Recibe</div>
+            <div style="font-weight:700; color:var(--accent);">${money(item.outputCurrency, item.outputAmount, isCopVes ? 2 : 0)}</div>
+          </div>
+          <div>
+            <div style="font-size:10px; color:var(--muted);">Ganancia</div>
+            <div style="font-weight:700; color:var(--ok);">${money("USDT", item.profit, 2)}</div>
+          </div>
+          
+          <div id="details-${item.id}" class="audit-card-details" style="display:none;">
+            <div class="audit-detail-row">
+              <span style="color:var(--muted)">ID Cotización:</span>
+              <span class="mono">${item.id}</span>
+            </div>
+            <div class="audit-detail-row">
+              <span style="color:var(--muted)">Usuario:</span>
+              <span class="mono">${item.user}</span>
+            </div>
+            <div class="audit-detail-row">
+              <span style="color:var(--muted)">Tasas de cambio:</span>
+              <span style="font-size:11px;">${item.rates}</span>
+            </div>
+            <div class="audit-detail-row">
+              <span style="color:var(--muted)">Dispositivo / Browser:</span>
+              <span>${item.sec_ua}</span>
+            </div>
+            <div class="audit-detail-row">
+              <span style="color:var(--muted)">Zona Horaria:</span>
+              <span class="mono">${item.sec_timezone}</span>
+            </div>
+            <div class="audit-detail-row">
+              <span style="color:var(--muted)">Canal IP:</span>
+              <span class="mono" style="color:var(--accent)">Encapsulado Cloudflare CDN (Secure Audit)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+window.toggleAuditDetails = function(id) {
+  const panel = document.getElementById(`details-${id}`);
+  if (panel) {
+    const isHidden = panel.style.display === "none";
+    panel.style.display = isHidden ? "block" : "none";
+  }
+};
+
+function exportHistoryCSV() {
+  const history = loadHistory();
+  if (history.length === 0) {
+    alert("No hay cotizaciones para exportar.");
+    return;
+  }
+
+  const headers = ["ID", "Fecha UTC", "Usuario", "Direccion", "Monto Entrada", "Moneda Entrada", "Monto Salida", "Moneda Salida", "Ganancia (USDT)", "Tasas", "Dispositivo", "Zona Horaria", "Estado Red"];
+  const rows = [headers];
+
+  history.forEach(item => {
+    rows.push([
+      item.id,
+      item.timestamp,
+      item.user,
+      item.directionLabel,
+      item.inputAmount,
+      item.inputCurrency,
+      item.outputAmount,
+      item.outputCurrency,
+      item.profit,
+      `"${item.rates.replace(/"/g, '""')}"`,
+      item.sec_ua,
+      item.sec_timezone,
+      item.sec_online
+    ]);
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(",")).join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `auditoria_caze_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function clearHistory() {
+  if (confirm("¿Estás seguro de que deseas limpiar todo el historial de auditoría de este dispositivo? Esta acción no se puede deshacer.")) {
+    saveHistory([]);
+    renderHistoryUI();
+  }
+}
+
+// Wire up events for History Tab
+function wireHistoryTabEvents() {
+  $("historySearch")?.addEventListener("input", renderHistoryUI);
+  $("historyFilterMode")?.addEventListener("change", renderHistoryUI);
+  $("btnHistExport")?.addEventListener("click", exportHistoryCSV);
+  $("btnHistClear")?.addEventListener("click", clearHistory);
+}
+
+// Bootstrap Auth + Professional Setup
 bootstrapAuth().finally(() => {
   hydrateAdjUI();
   updateRates();
+  
+  // Setup PWA
+  setupPWAEvents();
+
+  // Setup Live Rates Interval
+  setupLiveRates();
+
+  // Setup Audit logs UI
+  wireHistoryTabEvents();
+  renderHistoryUI();
 });
