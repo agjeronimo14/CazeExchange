@@ -15,11 +15,17 @@ const $ = (id) => document.getElementById(id);
 const API_BASE = (() => {
   try {
     const saved = localStorage.getItem("API_BASE");
-    if (saved) return saved.replace(/\/$/, "");
+    if (saved) {
+      const trimmed = saved.replace(/\/$/, "");
+      if (trimmed.includes("cazeexchange.pages.dev") || trimmed.includes("cazeexchange.com")) {
+        localStorage.removeItem("API_BASE");
+        return "";
+      }
+      return trimmed;
+    }
   } catch {}
 
-  const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
-  return isLocal ? "https://cazeexchange.pages.dev" : "";
+  return "";
 })();
 
 // Fetch helper (same-origin by default)
@@ -220,6 +226,7 @@ function wireBrandingUI() {
     state.branding = b;
     saveBrandingLocal(b);
     applyBrandingToUI(b);
+    updateShareUrl();
   }
 
   nameEl?.addEventListener("input", preview);
@@ -250,6 +257,28 @@ function wireBrandingUI() {
     saveBrandingLocal(b);
     hydrateBrandingUI();
     applyBrandingToUI(b);
+    updateShareUrl();
+  });
+
+  $("btnCopyShareUrl")?.addEventListener("click", () => {
+    const input = $("clientShareUrl");
+    if (input) {
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        const btn = $("btnCopyShareUrl");
+        if (btn) {
+          const prevText = btn.textContent;
+          btn.textContent = "Copiado! ✓";
+          btn.style.background = "var(--ok)";
+          btn.style.color = "var(--bg)";
+          setTimeout(() => {
+            btn.textContent = prevText;
+            btn.style.background = "";
+            btn.style.color = "";
+          }, 1500);
+        }
+      });
+    }
   });
 }
 
@@ -350,6 +379,7 @@ function applyPhase2Layout() {
       <button class="tabBtn" data-tab="quote" type="button">COP ➔ VES</button>
       <button class="tabBtn" data-tab="vesToCop" type="button">VES ➔ COP</button>
       <button class="tabBtn" data-tab="rates" type="button">Tasas/Ajustes</button>
+      <button class="tabBtn" data-tab="myRecords" id="tabMyRecordsMobile" type="button" style="display:none">Mis Registros</button>
       <button class="tabBtn" data-tab="history" id="tabHistoryMobile" type="button" style="display:none">Historial</button>
       <button class="tabBtn" data-tab="admin" id="tabAdminMobile" type="button" style="display:none">Admin</button>
     `;
@@ -406,6 +436,7 @@ function applyPhase2Layout() {
     bar.innerHTML = `
       <button id="btnCopyWA" class="btn" type="button">Copiar</button>
       <button id="btnOpenWA" class="btn primary" type="button">Abrir WhatsApp</button>
+      <button id="btnManualRegister" class="btn success" type="button" style="background:#25d366; color:#000; font-weight:700; border:none; display:inline-flex; align-items:center; gap:4px">💾 Registrar</button>
       <span id="waMsg" class="hint" style="margin-left:auto"></span>
     `;
     wa.insertAdjacentElement('afterend', bar);
@@ -414,10 +445,12 @@ function applyPhase2Layout() {
 
 function wireTabButtons() {
   document.querySelectorAll('.tabBtn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       setActiveTab(btn.dataset.tab);
       if (btn.dataset.tab === "history") {
-        renderHistoryUI();
+        await renderHistoryUI();
+      } else if (btn.dataset.tab === "myRecords") {
+        renderMyRecordsUI();
       }
     });
   });
@@ -802,6 +835,7 @@ mount.innerHTML = `
       <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">De COP a VES</button>
       <button class="tabBtn" data-tab="vesToCop" id="tabVesToCop" type="button">De VES a COP</button>
       <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas y Ajustes</button>
+      <button class="tabBtn" data-tab="myRecords" id="tabMyRecords" type="button" style="display:none">Mis Registros</button>
       <button class="tabBtn" data-tab="history" id="tabHistory" type="button" style="display:none">Historial</button>
       <button class="tabBtn" data-tab="admin" id="tabAdmin" type="button" style="display:none">Admin</button>
     </div>
@@ -994,6 +1028,15 @@ mount.innerHTML = `
             <button id="btnBrandSave" class="btn primary" type="button">Guardar branding</button>
             <button id="btnBrandReset" class="btn" type="button">Restablecer</button>
             <span id="brandMsg" class="hint" style="margin-left:auto"></span>
+          </div>
+
+          <div id="brandShareUrlSection" style="background:rgba(255,255,255,0.02); padding:16px; border-radius:12px; margin-top:20px; border:1px solid rgba(255,255,255,0.05); display:none">
+            <h3 style="margin-top:0; color:var(--accent); font-size:14px; font-weight:700;">🔗 Tu Enlace de Cotización para Clientes</h3>
+            <p class="hint" style="margin-bottom:10px; font-size:11px;">Comparte este enlace personalizado con tus clientes o instálalo en tus puntos de venta para cotizar con tu marca y colores de forma limpia y profesional.</p>
+            <div style="display:flex; gap:8px;">
+              <input id="clientShareUrl" readonly style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:6px 10px; flex:1; font-family:monospace; font-size:11px; color:#fff;" />
+              <button id="btnCopyShareUrl" class="btn primary" type="button" style="padding:0 12px; font-size:12px;">Copiar</button>
+            </div>
           </div>
         </section>
 
@@ -1237,6 +1280,32 @@ mount.innerHTML = `
             <div class="hint" style="text-align:center; padding:20px; color:var(--muted)">No hay cotizaciones registradas todavía. Realiza un cálculo para que aparezca aquí.</div>
           </div>
         </section>
+
+        <section class="pane" data-tabs="myRecords" style="display:none">
+          <h2>Mis Operaciones Registradas</h2>
+          <p class="hint">Lleva el control de tu caja diaria. Registra aquí las cotizaciones que cierres con éxito.</p>
+
+          <div style="height:10px"></div>
+
+          <div class="row" style="margin-bottom: 12px; gap:8px; align-items: center;">
+            <div class="field">
+              <label>Buscar operación registrada</label>
+              <input id="myRecordsSearch" placeholder="Escribe para buscar..." style="padding: 8px 12px;" />
+            </div>
+            <div class="field" style="max-width:140px">
+              <label>Dirección</label>
+              <select id="myRecordsFilterMode" style="padding: 8px 12px;">
+                <option value="all">Todas</option>
+                <option value="cop_ves">COP ➔ VES</option>
+                <option value="ves_cop">VES ➔ COP</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="myRecordsList" class="audit-list">
+            <div class="hint" style="text-align:center; padding:20px; color:var(--muted)">Aún no tienes operaciones registradas en tu caja hoy.</div>
+          </div>
+        </section>
       </div>
 
       <!-- RIGHT -->
@@ -1337,6 +1406,7 @@ mount.innerHTML = `
           <div class="waActions no-export" style="display:flex; gap:10px; align-items:center; margin-top:8px">
             <button id="btnCopyVesWA" class="btn" type="button">Copiar</button>
             <button id="btnOpenVesWA" class="btn primary" type="button">Abrir WhatsApp</button>
+            <button id="btnManualRegisterVes" class="btn success" type="button" style="background:#25d366; color:#000; font-weight:700; border:none; display:inline-flex; align-items:center; gap:4px">💾 Registrar</button>
             <span id="vesWaMsg" class="hint" style="margin-left:auto"></span>
           </div>
         </section>
@@ -1447,6 +1517,35 @@ mount.innerHTML = `
             <button id="btnHistClear" class="btn secondary" type="button" style="padding: 8px 10px; font-size:12px; color:var(--bad); border-color:rgba(255,90,106,0.25);">Limpiar todo</button>
           </div>
         </section>
+
+        <section class="pane" data-tabs="myRecords" style="display:none">
+          <h2>Resumen de mi Caja Diaria</h2>
+          <p class="hint">Volumen de operaciones y ganancias acumuladas que has guardado hoy en este dispositivo.</p>
+          
+          <div style="height:10px"></div>
+
+          <div class="history-kpi-grid">
+            <div class="kpi" style="padding:10px;">
+              <div class="cap">Cierres exitosos</div>
+              <div id="myRecCount" class="big" style="font-size:20px; font-weight:700;">0</div>
+            </div>
+            <div class="kpi" style="padding:10px;">
+              <div class="cap">Volumen COP</div>
+              <div id="myRecVolCop" class="big" style="font-size:16px; font-weight:700; word-break: break-all;">—</div>
+            </div>
+            <div class="kpi" style="padding:10px;">
+              <div class="cap">Mi Ganancia</div>
+              <div id="myRecProfit" class="big" style="font-size:16px; font-weight:700; color:var(--ok); word-break: break-all;">—</div>
+            </div>
+          </div>
+
+          <hr />
+
+          <div class="row" style="gap:10px; margin-top:15px">
+            <button id="btnMyRecExport" class="btn primary" type="button" style="flex:1">📥 Exportar Caja (CSV)</button>
+            <button id="btnMyRecClear" class="btn" type="button" style="flex:1; color:var(--bad); border-color:rgba(255,90,106,0.15)">🧹 Limpiar Caja</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -1521,6 +1620,12 @@ $("btnLogin")?.addEventListener("click", async () => {
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
     $("tabHistory").style.display = isAdmin ? "" : "none";
     if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = isAdmin ? "" : "none";
+    
+    // Mis registros visible para cualquier suscriptor autenticado
+    $("tabMyRecords").style.display = "";
+    if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "";
+    updateShareUrl();
+
     if (isAdmin) loadAdminUsers().catch(() => {});
     closeAuthModal();
     updateAll();
@@ -1536,17 +1641,61 @@ $("btnLogout")?.addEventListener("click", async () => {
   state.branding = loadBrandingLocal();
   applyBrandingToUI(state.branding);
   hydrateBrandingUI();
+  updateShareUrl();
   setUserBadge();
   $("btnLogout").style.display = "none";
   $("tabAdmin").style.display = "none";
   if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
   $("tabHistory").style.display = "none";
   if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = "none";
+  $("tabMyRecords").style.display = "none";
+  if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
   openAuthModal("Sesión cerrada.");
   updateAll();
 });
 
+function checkUrlBranding() {
+  const params = new URLSearchParams(window.location.search);
+  const brandParam = params.get("brand");
+  if (brandParam) {
+    const themeParam = params.get("theme") || "ocean";
+    const accentParam = params.get("accent") || "#4ea1ff";
+    
+    const customBrand = normalizeBranding({
+      brand_name: brandParam,
+      theme: themeParam,
+      accent: accentParam
+    });
+    
+    state.branding = customBrand;
+    saveBrandingLocal(customBrand);
+    applyBrandingToUI(customBrand);
+    
+    state.clientMode = true;
+    
+    // Ocultar elementos de administración si están presentes
+    const btnLogout = $("btnLogout");
+    if (btnLogout) btnLogout.style.display = "none";
+  }
+}
+
+function updateShareUrl() {
+  const input = $("clientShareUrl");
+  const section = $("brandShareUrlSection");
+  if (!input || !section) return;
+
+  if (state.user) {
+    section.style.display = "block";
+    const b = getBranding();
+    const url = `${window.location.origin}${window.location.pathname}?brand=${encodeURIComponent(b.brand_name)}&theme=${b.theme}&accent=${encodeURIComponent(b.accent)}`;
+    input.value = url;
+  } else {
+    section.style.display = "none";
+  }
+}
+
 async function bootstrapAuth() {
+  checkUrlBranding();
   try {
     const me = await apiFetch("/api/me", { method: "GET" });
     state.user = me.user;
@@ -1562,16 +1711,23 @@ async function bootstrapAuth() {
     }
     applyBrandingToUI(state.branding);
     hydrateBrandingUI();
-
+    updateShareUrl();
 
     setUserBadge();
-    $("btnLogout").style.display = "";
+    if (!state.clientMode) {
+      $("btnLogout").style.display = "";
+    }
     // admin tab visibility
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = isAdmin ? "" : "none";
     $("tabHistory").style.display = isAdmin ? "" : "none";
     if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = isAdmin ? "" : "none";
+    
+    // Mis registros visible para cualquier suscriptor autenticado
+    $("tabMyRecords").style.display = "";
+    if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "";
+
     if (isAdmin) loadAdminUsers().catch(() => {});
 
     closeAuthModal();
@@ -1579,16 +1735,24 @@ async function bootstrapAuth() {
     // no session: start block and show modal
     state.user = null;
     state.demo = false;
-    state.branding = loadBrandingLocal();
-    applyBrandingToUI(state.branding);
-    hydrateBrandingUI();
+    if (!state.clientMode) {
+      state.branding = loadBrandingLocal();
+      applyBrandingToUI(state.branding);
+      hydrateBrandingUI();
+    }
+    updateShareUrl();
     setUserBadge();
     $("btnLogout").style.display = "none";
     $("tabAdmin").style.display = "none";
     if ($("tabAdminMobile")) $("tabAdminMobile").style.display = "none";
     $("tabHistory").style.display = "none";
     if ($("tabHistoryMobile")) $("tabHistoryMobile").style.display = "none";
-    openAuthModal("");
+    $("tabMyRecords").style.display = "none";
+    if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
+    
+    if (!state.clientMode) {
+      openAuthModal("");
+    }
   }
 }
 
@@ -2849,12 +3013,31 @@ function getCleanUserAgent() {
   return "Navegador Web";
 }
 
-function loadHistory() {
+async function loadHistory() {
+  if (state.user?.role !== "admin") {
+    try {
+      const raw = localStorage.getItem("CAZE_QUOTES_HISTORY");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
   try {
-    const raw = localStorage.getItem("CAZE_QUOTES_HISTORY");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
+    const data = await apiFetch("/api/admin/history", { method: "GET" });
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.history)) return data.history;
+    if (data && Array.isArray(data.audits)) return data.audits;
+    if (data && Array.isArray(data.data)) return data.data;
     return [];
+  } catch (e) {
+    console.warn("No se pudo cargar el historial desde el servidor:", e);
+    try {
+      const raw = localStorage.getItem("CAZE_QUOTES_HISTORY");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -2864,14 +3047,14 @@ function saveHistory(history) {
   } catch {}
 }
 
-function addHistoryEntry(entry) {
-  const history = loadHistory();
+async function addHistoryEntry(entry) {
+  const history = await loadHistory();
   history.unshift(entry);
   if (history.length > 500) {
     history.pop();
   }
   saveHistory(history);
-  renderHistoryUI();
+  await renderHistoryUI();
 }
 
 let lastLoggedHash = "";
@@ -2991,11 +3174,11 @@ function saveActiveQuoteToHistory() {
   }
 }
 
-function renderHistoryUI() {
+async function renderHistoryUI() {
   const historyList = $("historyList");
   if (!historyList) return;
 
-  const history = loadHistory();
+  const history = await loadHistory();
   const searchVal = ($("historySearch")?.value || "").trim().toLowerCase();
   const filterMode = $("historyFilterMode")?.value || "all";
 
@@ -3116,8 +3299,8 @@ window.toggleAuditDetails = function(id) {
   }
 };
 
-function exportHistoryCSV() {
-  const history = loadHistory();
+async function exportHistoryCSV() {
+  const history = await loadHistory();
   if (history.length === 0) {
     alert("No hay cotizaciones para exportar.");
     return;
@@ -3154,10 +3337,10 @@ function exportHistoryCSV() {
   document.body.removeChild(link);
 }
 
-function clearHistory() {
+async function clearHistory() {
   if (confirm("¿Estás seguro de que deseas limpiar todo el historial de auditoría de este dispositivo? Esta acción no se puede deshacer.")) {
     saveHistory([]);
-    renderHistoryUI();
+    await renderHistoryUI();
   }
 }
 
@@ -3167,6 +3350,306 @@ function wireHistoryTabEvents() {
   $("historyFilterMode")?.addEventListener("change", renderHistoryUI);
   $("btnHistExport")?.addEventListener("click", exportHistoryCSV);
   $("btnHistClear")?.addEventListener("click", clearHistory);
+}
+
+// ---------- NUEVAS FUNCIONES DE 'MIS REGISTROS' (CAJA DIARIA DEL SUSCRIPTOR) ----------
+
+function loadMyRecords() {
+  try {
+    const raw = localStorage.getItem("CAZE_USER_OPERATIONS");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMyRecords(records) {
+  try {
+    localStorage.setItem("CAZE_USER_OPERATIONS", JSON.stringify(records));
+  } catch {}
+}
+
+function addMyRecordEntry(entry) {
+  const records = loadMyRecords();
+  records.unshift(entry);
+  saveMyRecords(records);
+  renderMyRecordsUI();
+}
+
+function deleteMyRecord(id) {
+  if (confirm("¿Seguro que deseas eliminar esta operación de tu registro de caja?")) {
+    const records = loadMyRecords();
+    const updated = records.filter(r => r.id !== id);
+    saveMyRecords(updated);
+    renderMyRecordsUI();
+  }
+}
+
+window.deleteMyRecord = deleteMyRecord;
+
+function clearMyRecords() {
+  if (confirm("¿Estás seguro de que deseas limpiar todas las operaciones guardadas hoy en tu caja? Esta acción no afectará la auditoría del administrador.")) {
+    saveMyRecords([]);
+    renderMyRecordsUI();
+  }
+}
+
+function renderMyRecordsUI() {
+  const listEl = $("myRecordsList");
+  if (!listEl) return;
+
+  const records = loadMyRecords();
+  const searchVal = ($("myRecordsSearch")?.value || "").trim().toLowerCase();
+  const filterMode = $("myRecordsFilterMode")?.value || "all";
+
+  const filtered = records.filter(item => {
+    if (filterMode === "cop_ves" && item.direction !== "cop_ves") return false;
+    if (filterMode === "ves_cop" && item.direction !== "ves_cop") return false;
+
+    if (searchVal) {
+      const amtInStr = `${item.inputAmount} ${item.inputCurrency}`.toLowerCase();
+      const amtOutStr = `${item.outputAmount} ${item.outputCurrency}`.toLowerCase();
+      const idStr = String(item.id).toLowerCase();
+      return idStr.includes(searchVal) || amtInStr.includes(searchVal) || amtOutStr.includes(searchVal);
+    }
+    return true;
+  });
+
+  const count = records.length;
+  let totalVolCop = 0;
+  let totalProfitUsdt = 0;
+
+  records.forEach(item => {
+    if (item.inputCurrency === "COP") {
+      totalVolCop += item.inputAmount;
+    } else if (item.outputCurrency === "COP") {
+      totalVolCop += item.outputAmount;
+    }
+    
+    if (item.profitCurrency === "USDT") {
+      totalProfitUsdt += item.profit;
+    }
+  });
+
+  setText("myRecCount", String(count));
+  setText("myRecVolCop", totalVolCop > 0 ? money("COP", totalVolCop, 0) : "—");
+  setText("myRecProfit", totalProfitUsdt > 0 ? money("USDT", totalProfitUsdt, 2) : "—");
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="hint" style="text-align:center; padding:30px; color:var(--muted)">No se encontraron registros de caja con los filtros actuales.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(item => {
+    const formattedDate = new Date(item.timestamp).toLocaleString("es-ES", {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit"
+    });
+
+    const isCopVes = item.direction === "cop_ves";
+    const tagClass = isCopVes ? "in" : "out";
+
+    return `
+      <div class="audit-card">
+        <div class="audit-card-header" style="align-items:center;">
+          <span class="audit-tag ${tagClass}">${item.directionLabel}</span>
+          <span class="mono" style="font-size:11px; color:var(--muted);">${formattedDate}</span>
+          <button class="btn xs" onclick="deleteMyRecord('${item.id}')" style="padding: 2px 8px; font-size:11px; margin-left:auto; border-radius:6px; background:rgba(255,90,106,0.1); color:var(--bad); border:none; cursor:pointer;">Eliminar</button>
+        </div>
+        <div class="audit-card-body" style="grid-template-columns: repeat(3, 1fr); margin-top:8px;">
+          <div>
+            <div style="font-size:10px; color:var(--muted);">Entrega</div>
+            <div style="font-weight:700;">${isCopVes ? money("COP", item.inputAmount, 0) : (item.inputCurrency === "USD" ? money("USD", item.inputAmount, 2) : money("VES", item.inputAmount, 2))}</div>
+          </div>
+          <div>
+            <div style="font-size:10px; color:var(--muted);">Recibe</div>
+            <div style="font-weight:700; color:var(--accent);">${money(item.outputCurrency, item.outputAmount, isCopVes ? 2 : 0)}</div>
+          </div>
+          <div>
+            <div style="font-size:10px; color:var(--muted);">Ganancia</div>
+            <div style="font-weight:700; color:var(--ok);">${money("USDT", item.profit, 2)}</div>
+          </div>
+        </div>
+        <div style="margin-top:6px; font-size:10px; color:var(--muted); font-family:monospace; border-top:1px solid rgba(255,255,255,0.02); padding-top:4px;">
+          ID: ${item.id} | Tasas: ${item.rates}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function exportMyRecordsCSV() {
+  const records = loadMyRecords();
+  if (records.length === 0) {
+    alert("No hay registros en tu caja para exportar.");
+    return;
+  }
+
+  const headers = ["ID", "Fecha", "Direccion", "Monto Entrada", "Moneda Entrada", "Monto Salida", "Moneda Salida", "Ganancia (USDT)", "Tasas Aplicadas"];
+  const rows = [headers];
+
+  records.forEach(item => {
+    rows.push([
+      item.id,
+      item.timestamp,
+      item.directionLabel,
+      item.inputAmount,
+      item.inputCurrency,
+      item.outputAmount,
+      item.outputCurrency,
+      item.profit,
+      `"${item.rates.replace(/"/g, '""')}"`
+    ]);
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(",")).join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `mi_caja_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function registerCurrentQuote() {
+  const inCopVal = parseNum($("inCop")?.value);
+  const msgEl = $("waMsg");
+  if (!inCopVal || inCopVal <= 0) {
+    if (msgEl) {
+      msgEl.textContent = "Faltan datos de cálculo";
+      msgEl.style.color = "var(--bad)";
+    }
+    return;
+  }
+
+  const main = calcMain({ paint: false });
+  if (!main) return;
+  const primaryInv = calcInverse(main);
+  const active = getActiveQuote(main, primaryInv);
+  if (!active || !active.cop || active.cop <= 0) {
+    if (msgEl) {
+      msgEl.textContent = "Completa los datos primero";
+      msgEl.style.color = "var(--bad)";
+    }
+    return;
+  }
+
+  const entry = {
+    id: "REG-" + Math.floor(100000 + Math.random() * 900000),
+    timestamp: new Date().toISOString(),
+    direction: "cop_ves",
+    directionLabel: "COP ➔ VES",
+    inputAmount: active.cop,
+    inputCurrency: "COP",
+    outputAmount: active.vesUsed,
+    outputCurrency: "VES",
+    profit: active.feeUsdt,
+    profitCurrency: "USDT",
+    rates: `USDT/COP: ${parseNum($("usdtCopBuy")?.value)} | USDT/VES: ${parseNum($("usdtVesSell")?.value)}`
+  };
+
+  addMyRecordEntry(entry);
+
+  if (msgEl) {
+    msgEl.textContent = "✓ ¡Operación registrada!";
+    msgEl.style.color = "var(--ok)";
+    setTimeout(() => { msgEl.textContent = ""; }, 2000);
+  }
+}
+
+function registerCurrentVesToCop() {
+  const inVesVal = parseNum($("inVes")?.value);
+  const msgEl = $("vesWaMsg");
+  if (!inVesVal || inVesVal <= 0) {
+    if (msgEl) {
+      msgEl.textContent = "Faltan datos de cálculo";
+      msgEl.style.color = "var(--bad)";
+    }
+    return;
+  }
+
+  const isUsd = state.vesCurrency === "usd";
+  const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value);
+  const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
+  const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || null;
+  
+  let rateVesPerUsd = null;
+  if (isUsd) {
+    rateVesPerUsd = 1.0;
+  } else {
+    const rateType = $("vesUsdRateType")?.value;
+    if (rateType === "usdtVesBuy") {
+      rateVesPerUsd = parseNum($("usdtVesBuy")?.value);
+    } else if (rateType === "usdtVesSell") {
+      rateVesPerUsd = parseNum($("usdtVesSell")?.value);
+    } else if (rateType === "usdVesPar") {
+      rateVesPerUsd = parseNum($("usdVesPar")?.value);
+    } else if (rateType === "usdVesOf") {
+      rateVesPerUsd = parseNum($("usdVesOf")?.value);
+    } else if (rateType === "eurVes") {
+      const eurVes = parseNum($("eurVes")?.value);
+      const eurUsd = parseNum($("eurUsd")?.value);
+      rateVesPerUsd = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : null;
+    }
+  }
+
+  if (!rateVesPerUsd || !vesUsdtCopBuy) {
+    if (msgEl) {
+      msgEl.textContent = "Tasas incompletas";
+      msgEl.style.color = "var(--bad)";
+    }
+    return;
+  }
+
+  const baseUsdt = isUsd ? inVesVal : (inVesVal / rateVesPerUsd);
+  const vesFeeType = $("vesFeeType")?.value;
+  const vesFeePct = parseNum($("vesFeePct")?.value) / 100;
+  const vesFeeFixed = parseNum($("vesFeeFixed")?.value);
+  const feeUsdt = vesFeeType === "pct" ? (baseUsdt * vesFeePct) : vesFeeFixed;
+  const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+  const copReceived = netUsdt * vesUsdtCopBuy;
+
+  const entry = {
+    id: "REG-" + Math.floor(100000 + Math.random() * 900000),
+    timestamp: new Date().toISOString(),
+    direction: "ves_cop",
+    directionLabel: isUsd ? "USD ➔ COP" : "VES ➔ COP",
+    inputAmount: inVesVal,
+    inputCurrency: isUsd ? "USD" : "VES",
+    outputAmount: copReceived,
+    outputCurrency: "COP",
+    profit: feeUsdt,
+    profitCurrency: "USDT",
+    rates: `USDT/COP: ${vesUsdtCopBuy} | USDT/VES: ${rateVesPerUsd}`
+  };
+
+  addMyRecordEntry(entry);
+
+  if (msgEl) {
+    msgEl.textContent = "✓ ¡Operación registrada!";
+    msgEl.style.color = "var(--ok)";
+    setTimeout(() => { msgEl.textContent = ""; }, 2000);
+  }
+}
+
+function wireMyRecordsTabEvents() {
+  $("myRecordsSearch")?.addEventListener("input", renderMyRecordsUI);
+  $("myRecordsFilterMode")?.addEventListener("change", renderMyRecordsUI);
+  $("btnMyRecExport")?.addEventListener("click", exportMyRecordsCSV);
+  $("btnMyRecClear")?.addEventListener("click", clearMyRecords);
+
+  // Registro desde calculadoras
+  // El botón de COP a VES se inyecta dinámicamente en applyPhase2Layout
+  // así que usaremos delegación de eventos en el colRight
+  $("colRight")?.addEventListener("click", (e) => {
+    if (e.target && e.target.id === "btnManualRegister") {
+      registerCurrentQuote();
+    }
+  });
+
+  // El botón de VES a COP es estático
+  $("btnManualRegisterVes")?.addEventListener("click", registerCurrentVesToCop);
 }
 
 // Bootstrap Auth + Professional Setup
@@ -3183,4 +3666,8 @@ bootstrapAuth().finally(() => {
   // Setup Audit logs UI
   wireHistoryTabEvents();
   renderHistoryUI();
+
+  // Setup My Records UI
+  wireMyRecordsTabEvents();
+  renderMyRecordsUI();
 });
