@@ -349,9 +349,7 @@ function applyPhase2Layout() {
     nav.innerHTML = `
       <button class="tabBtn" data-tab="quote" type="button">COP ➔ VES</button>
       <button class="tabBtn" data-tab="vesToCop" type="button">VES ➔ COP</button>
-      <button class="tabBtn" data-tab="rates" type="button">Tasas</button>
-      <button class="tabBtn" data-tab="summary" type="button">Resumen</button>
-      <button class="tabBtn" data-tab="whatsapp" type="button">WhatsApp</button>
+      <button class="tabBtn" data-tab="rates" type="button">Tasas/Ajustes</button>
       <button class="tabBtn" data-tab="admin" id="tabAdminMobile" type="button" style="display:none">Admin</button>
     `;
     container.appendChild(nav);
@@ -417,6 +415,73 @@ function wireTabButtons() {
   document.querySelectorAll('.tabBtn').forEach((btn) => {
     btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
   });
+}
+
+function loadVesCurrencyLocal() {
+  try {
+    return localStorage.getItem("CAZE_VES_CURRENCY") || "ves";
+  } catch {
+    return "ves";
+  }
+}
+
+function saveVesCurrencyLocal(val) {
+  try {
+    localStorage.setItem("CAZE_VES_CURRENCY", val);
+  } catch {}
+}
+
+function wireVesCurrencyButtons() {
+  const btnVes = document.getElementById("vesCurrencyVes");
+  const btnUsd = document.getElementById("vesCurrencyUsd");
+  if (!btnVes || !btnUsd) return;
+
+  const updateButtons = () => {
+    btnVes.classList.toggle("active", state.vesCurrency === "ves");
+    btnUsd.classList.toggle("active", state.vesCurrency === "usd");
+
+    // Show/hide rate selector
+    const rateSelectorField = document.getElementById("vesUsdRateTypeField");
+    if (rateSelectorField) {
+      rateSelectorField.style.display = state.vesCurrency === "ves" ? "" : "none";
+    }
+
+    // Change label and placeholder
+    const labelInVes = document.getElementById("labInVes");
+    const inputInVes = document.getElementById("inVes");
+    if (labelInVes) {
+      labelInVes.textContent = state.vesCurrency === "ves" ? "Monto que te entrega (VES)" : "Monto que te entrega (USD)";
+    }
+    if (inputInVes) {
+      inputInVes.placeholder = state.vesCurrency === "ves" ? "Ej: 50000" : "Ej: 100";
+    }
+
+    // Change result labels
+    const capRate = document.getElementById("capVesCopRate");
+    if (capRate) {
+      capRate.textContent = state.vesCurrency === "ves" ? "Tasa inversa (COP por 1 VES)" : "Tasa inversa (COP por 1 USD)";
+    }
+    const capEntrega = document.getElementById("capVesEntrega");
+    if (capEntrega) {
+      capEntrega.textContent = state.vesCurrency === "ves" ? "Entrega en Venezuela (VES)" : "Entrega en Venezuela (USD)";
+    }
+  };
+
+  btnVes.addEventListener("click", () => {
+    state.vesCurrency = "ves";
+    saveVesCurrencyLocal("ves");
+    updateButtons();
+    recalcAll();
+  });
+
+  btnUsd.addEventListener("click", () => {
+    state.vesCurrency = "usd";
+    saveVesCurrencyLocal("usd");
+    updateButtons();
+    recalcAll();
+  });
+
+  updateButtons();
 }
 
 function wireWhatsappActions() {
@@ -670,6 +735,7 @@ const state = {
   // UI (persistente)
   quoteMode: (typeof localStorage !== "undefined" && localStorage.getItem("quoteMode")) || "goal",
   invLast: (typeof localStorage !== "undefined" && localStorage.getItem("invLast")) || "invVes",
+  vesCurrency: (typeof localStorage !== "undefined" && localStorage.getItem("CAZE_VES_CURRENCY")) || "ves",
 };
 
 // ---------- mount ----------
@@ -704,9 +770,7 @@ mount.innerHTML = `
     <div class="tabsTop" role="tablist" aria-label="Navegación">
       <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">De COP a VES</button>
       <button class="tabBtn" data-tab="vesToCop" id="tabVesToCop" type="button">De VES a COP</button>
-      <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas</button>
-      <button class="tabBtn" data-tab="summary" id="tabSummary" type="button">Resumen</button>
-      <button class="tabBtn" data-tab="whatsapp" id="tabWhatsApp" type="button">WhatsApp</button>
+      <button class="tabBtn" data-tab="rates" id="tabRates" type="button">Tasas y Ajustes</button>
       <button class="tabBtn" data-tab="admin" id="tabAdmin" type="button" style="display:none">Admin</button>
     </div>
 
@@ -936,15 +1000,25 @@ mount.innerHTML = `
 
         <section class="pane" data-tabs="vesToCop">
           <h2>Entradas (Remesa de VES a COP)</h2>
-          <p class="hint">Calcula cuántos COP (pesos colombianos) recibe el beneficiario en base a la cantidad de VES (bolívares) que te entrega el cliente.</p>
+          <p class="hint">Calcula cuántos COP (pesos colombianos) recibe el beneficiario en base a la cantidad de VES (bolívares) o USD (dólares) que te entrega el cliente.</p>
+
+          <div class="row formRow" style="margin-bottom:12px">
+            <div class="field" style="grid-column: span 2;">
+              <label>Moneda que entrega el cliente (VES ➔ COP)</label>
+              <div class="segmented" role="tablist" aria-label="Moneda que entrega">
+                <button id="vesCurrencyVes" class="segBtn active" type="button">Bolívares (VES)</button>
+                <button id="vesCurrencyUsd" class="segBtn" type="button">Dólares (USD)</button>
+              </div>
+            </div>
+          </div>
 
           <div class="row">
             <div class="field">
-              <label>Monto que te entrega (VES)</label>
+              <label id="labInVes">Monto que te entrega (VES)</label>
               <input id="inVes" inputmode="decimal" placeholder="Ej: 50000" />
             </div>
 
-            <div class="field">
+            <div class="field" id="vesUsdRateTypeField">
               <label>Tipo de tasa de cambio (VES → USD)</label>
               <select id="vesUsdRateType">
                 <option value="usdtVesSell">Binance USDT/VES (Vender)</option>
@@ -1079,7 +1153,7 @@ mount.innerHTML = `
 
       <!-- RIGHT -->
       <div id="colRight" class="card">
-        <section class="pane" data-tabs="summary">
+        <section class="pane" data-tabs="quote">
           <h2>Resumen para el cliente</h2>
         <div id="quoteSourceBadge" class="badge mono" style="margin:-4px 0 10px 0">Fuente: —</div>
 
@@ -1122,7 +1196,7 @@ mount.innerHTML = `
         
         </section>
 
-        <section class="pane" data-tabs="whatsapp">
+        <section class="pane" data-tabs="quote">
           <h2>Mensaje WhatsApp (copiar/pegar)</h2>
         <textarea id="wa" readonly></textarea>
 
@@ -1136,7 +1210,7 @@ mount.innerHTML = `
           <div class="badge mono" style="margin:-4px 0 10px 0">Sentido: Venezuela → Colombia</div>
 
           <div class="kpi">
-            <div class="cap">Tasa inversa (COP por 1 VES)</div>
+            <div class="cap" id="capVesCopRate">Tasa inversa (COP por 1 VES)</div>
             <div id="kpiVesCopRate" class="big">—</div>
             <div class="cap mono" id="kpiVesCopNote">COP que recibe por cada 1 Bolívar entregado</div>
           </div>
@@ -1144,7 +1218,7 @@ mount.innerHTML = `
           <div style="height:10px"></div>
 
           <div class="kpi">
-            <div class="cap">Entrega en Venezuela (cliente)</div>
+            <div class="cap" id="capVesEntrega">Entrega en Venezuela (VES)</div>
             <div id="outVesEntrega" class="big">—</div>
             <div class="cap">Recibe en Colombia (beneficiario)</div>
             <div id="outVesRecibe" class="big">—</div>
@@ -1179,7 +1253,7 @@ mount.innerHTML = `
           </div>
         </section>
 
-        <section class="pane" data-tabs="summary">
+        <section class="pane" data-tabs="rates">
           <div class="posterHeader">
           <div>
             <h2 style="margin:0">Tabla para redes (exportable)</h2>
@@ -1260,6 +1334,7 @@ mount.innerHTML = `
 applyPhase2Layout();
 setActiveTab("quote");
 wireTabButtons();
+wireVesCurrencyButtons();
 wireWhatsappActions();
 
 // branding init (preview inmediato)
@@ -1801,7 +1876,7 @@ function setVesToCopBlank() {
 
 function calcVesToCop() {
   const v = parseNum($("inVes")?.value);
-  const rateType = $("vesUsdRateType")?.value;
+  const isUsd = state.vesCurrency === "usd";
   
   const defaultUsdtCopBuy = parseNum($("usdtCopBuy")?.value);
   const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value);
@@ -1825,18 +1900,24 @@ function calcVesToCop() {
   // Determinar la tasa VES -> USD según la selección
   let rateVesPerUsd = null;
   let methodLabel = "—";
-  if (rateType === "usdtVesSell") {
-    rateVesPerUsd = usdtVesSell;
-    methodLabel = "Binance USDT/VES";
-  } else if (rateType === "usdVesPar") {
-    rateVesPerUsd = usdPar;
-    methodLabel = "Paralelo";
-  } else if (rateType === "usdVesOf") {
-    rateVesPerUsd = usdBcv;
-    methodLabel = "Oficial BCV";
-  } else if (rateType === "eurVes") {
-    rateVesPerUsd = usdViaEur;
-    methodLabel = "Euro BCV / EURUSD";
+  if (isUsd) {
+    rateVesPerUsd = 1.0;
+    methodLabel = "Entrega en USD";
+  } else {
+    const rateType = $("vesUsdRateType")?.value;
+    if (rateType === "usdtVesSell") {
+      rateVesPerUsd = usdtVesSell;
+      methodLabel = "Binance USDT/VES";
+    } else if (rateType === "usdVesPar") {
+      rateVesPerUsd = usdPar;
+      methodLabel = "Paralelo";
+    } else if (rateType === "usdVesOf") {
+      rateVesPerUsd = usdBcv;
+      methodLabel = "Oficial BCV";
+    } else if (rateType === "eurVes") {
+      rateVesPerUsd = usdViaEur;
+      methodLabel = "Euro BCV / EURUSD";
+    }
   }
 
   if (!v || !rateVesPerUsd || !vesUsdtCopBuy) {
@@ -1845,7 +1926,7 @@ function calcVesToCop() {
   }
 
   // 1) Convierte los Bolívares que entrega el cliente a base USD (compramos USDT con VES)
-  const baseUsdt = v / rateVesPerUsd;
+  const baseUsdt = isUsd ? v : (v / rateVesPerUsd);
 
   // 2) Cobras ganancia en USD/USDT
   const feeUsdt = vesFeeType === "pct" ? (baseUsdt * vesFeePct) : vesFeeFixed;
@@ -1854,12 +1935,12 @@ function calcVesToCop() {
   // 3) Convierte los USD/USDT netos a COP (se entregan en Colombia)
   const copReceived = netUsdt * vesUsdtCopBuy;
 
-  // 4) Tasa equivalente COP por 1 VES
+  // 4) Tasa equivalente COP por 1 VES o 1 USD
   const copPerVes = copReceived / v;
   const feeCop = feeUsdt * vesUsdtCopBuy;
 
   // Pintar en el resumen de VES a COP
-  setText("outVesEntrega", money("VES", v, 2));
+  setText("outVesEntrega", isUsd ? money("USD", v, 2) : money("VES", v, 2));
   setText("outVesRecibe", money("COP", copReceived, 0));
   setText("outVesBaseUsdt", money("USDT", baseUsdt, 2));
   setText("outVesFeeUsdt", money("USDT", feeUsdt, 2));
@@ -1868,7 +1949,7 @@ function calcVesToCop() {
 
   if (copPerVes > 0) {
     setText("kpiVesCopRate", `COP ${fmt(copPerVes, 6)}`);
-    setText("kpiVesCopNote", `COP por 1 VES (usando ${methodLabel})`);
+    setText("kpiVesCopNote", isUsd ? `COP por 1 USD (monto neto)` : `COP por 1 VES (usando ${methodLabel})`);
   } else {
     setText("kpiVesCopRate", "—");
     setText("kpiVesCopNote", "Faltan tasas para calcular");
@@ -1878,14 +1959,14 @@ function calcVesToCop() {
   const lines = [
     `*${getBrandName()}* — Cotización remesa (Venezuela ➔ Colombia)`,
     `══════════════════════`,
-    `➔ *Entrega (Venezuela):* ${fmt(v, 2)} VES`,
+    isUsd ? `➔ *Entrega (Venezuela):* ${fmt(v, 2)} USD` : `➔ *Entrega (Venezuela):* ${fmt(v, 2)} VES`,
     `➔ *Recibe (Colombia):* ${fmt(copReceived, 0)} COP`,
-    `Tasa equivalente: 1 VES = ${fmt(copPerVes, 6)} COP`,
-    `Tasa de referencia VES/USDT: ${fmt(rateVesPerUsd, 2)}`,
+    isUsd ? `Tasa equivalente: 1 USD = ${fmt(copPerVes, 6)} COP` : `Tasa equivalente: 1 VES = ${fmt(copPerVes, 6)} COP`,
+    !isUsd ? `Tasa de referencia VES/USDT: ${fmt(rateVesPerUsd, 2)}` : null,
     `Tasa de referencia USDT/COP: ${fmt(vesUsdtCopBuy, 2)}`,
     `══════════════════════`,
     `Cotización generada automáticamente.`
-  ];
+  ].filter(Boolean);
   const msg = lines.join("\n");
   const waEl = $("vesWa");
   if (waEl) waEl.value = msg;
@@ -1974,15 +2055,15 @@ async function exportPoster() {
   const poster = $('poster');
   if (!poster) return;
 
-  // IMPORTANT: the poster lives inside the Summary tab.
-  // If the user is on another tab (eg. Rates), the poster is hidden (display:none).
+  // IMPORTANT: the poster lives inside the Rates tab.
+  // If the user is on another tab (eg. Quote), the poster is hidden (display:none).
   // html2canvas will then render a 0x0 canvas and Chrome downloads a 0B file.
   const prevTab = document.querySelector('.tabBtn.active')?.dataset?.tab || 'quote';
-  const needSwitch = prevTab !== 'summary';
+  const needSwitch = prevTab !== 'rates';
 
   try {
     if (needSwitch) {
-      setActiveTab('summary');
+      setActiveTab('rates');
       // Wait 2 frames so layout/styling settles before capture
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     }
@@ -1994,8 +2075,8 @@ async function exportPoster() {
     }
 
     const rect = poster.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      if ($('status')) $('status').textContent = 'Export: abre la pestaña Resumen';
+    if (rect.width === 0 || rect.height === 0) {
+      if ($('status')) $('status').textContent = 'Export: abre la pestaña Tasas y Ajustes';
       return;
     }
 
