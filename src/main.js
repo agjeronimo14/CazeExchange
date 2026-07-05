@@ -226,7 +226,6 @@ function wireBrandingUI() {
     state.branding = b;
     saveBrandingLocal(b);
     applyBrandingToUI(b);
-    updateShareUrl();
   }
 
   nameEl?.addEventListener("input", preview);
@@ -257,28 +256,6 @@ function wireBrandingUI() {
     saveBrandingLocal(b);
     hydrateBrandingUI();
     applyBrandingToUI(b);
-    updateShareUrl();
-  });
-
-  $("btnCopyShareUrl")?.addEventListener("click", () => {
-    const input = $("clientShareUrl");
-    if (input) {
-      input.select();
-      navigator.clipboard.writeText(input.value).then(() => {
-        const btn = $("btnCopyShareUrl");
-        if (btn) {
-          const prevText = btn.textContent;
-          btn.textContent = "Copiado! ✓";
-          btn.style.background = "var(--ok)";
-          btn.style.color = "var(--bg)";
-          setTimeout(() => {
-            btn.textContent = prevText;
-            btn.style.background = "";
-            btn.style.color = "";
-          }, 1500);
-        }
-      });
-    }
   });
 }
 
@@ -1025,15 +1002,6 @@ mount.innerHTML = `
             <button id="btnBrandReset" class="btn" type="button">Restablecer</button>
             <span id="brandMsg" class="hint" style="margin-left:auto"></span>
           </div>
-
-          <div id="brandShareUrlSection" style="background:rgba(255,255,255,0.02); padding:16px; border-radius:12px; margin-top:20px; border:1px solid rgba(255,255,255,0.05); display:none">
-            <h3 style="margin-top:0; color:var(--accent); font-size:14px; font-weight:700;">🔗 Tu Enlace de Cotización para Clientes</h3>
-            <p class="hint" style="margin-bottom:10px; font-size:11px;">Comparte este enlace personalizado con tus clientes o instálalo en tus puntos de venta para cotizar con tu marca y colores de forma limpia y profesional.</p>
-            <div style="display:flex; gap:8px;">
-              <input id="clientShareUrl" readonly style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:6px 10px; flex:1; font-family:monospace; font-size:11px; color:#fff;" />
-              <button id="btnCopyShareUrl" class="btn primary" type="button" style="padding:0 12px; font-size:12px;">Copiar</button>
-            </div>
-          </div>
         </section>
 
         <section class="pane" data-tabs="quote">
@@ -1245,6 +1213,36 @@ mount.innerHTML = `
                 </tr>
               </thead>
               <tbody id="adminUsersTbody"></tbody>
+            </table>
+          </div>
+
+          <hr/>
+
+          <h2 style="margin:0">Bitácora de Auditoría Global (SaaS Audit Trail)</h2>
+          <p class="hint" style="margin-top:4px; margin-bottom:12px;">Seguimiento en tiempo real de todos los cálculos y cotizaciones realizadas por los suscriptores. Registro inalterable guardado en la base de datos segura.</p>
+
+          <div class="row" style="margin-bottom: 12px; gap:8px; align-items: center;">
+            <div class="field" style="max-width:100%;">
+              <label>Buscar en la bitácora de auditoría (usuario, dirección, IP, dispositivo, etc.)</label>
+              <input id="adminAuditSearch" placeholder="Escribe para buscar..." style="padding: 10px 14px;" />
+            </div>
+          </div>
+
+          <div style="overflow:auto; max-height:450px; border:1px solid rgba(255,255,255,0.05); border-radius:12px; background:rgba(0,0,0,0.15);">
+            <table class="table" style="font-size:12px;">
+              <thead>
+                <tr>
+                  <th>Fecha/Hora</th>
+                  <th>Suscriptor</th>
+                  <th>Operación / Detalles</th>
+                  <th>Entorno / Conexión</th>
+                </tr>
+              </thead>
+              <tbody id="adminAuditTbody">
+                <tr>
+                  <td colspan="4" class="hint" style="text-align:center; padding:30px; color:var(--muted)">Cargando bitácora de auditoría global...</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </section>
@@ -1529,7 +1527,6 @@ $("btnLogin")?.addEventListener("click", async () => {
     // Mis registros visible para cualquier suscriptor autenticado
     $("tabMyRecords").style.display = "";
     if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "";
-    updateShareUrl();
 
     if (isAdmin) loadAdminUsers().catch(() => {});
     closeAuthModal();
@@ -1546,7 +1543,6 @@ $("btnLogout")?.addEventListener("click", async () => {
   state.branding = loadBrandingLocal();
   applyBrandingToUI(state.branding);
   hydrateBrandingUI();
-  updateShareUrl();
   setUserBadge();
   $("btnLogout").style.display = "none";
   $("tabAdmin").style.display = "none";
@@ -1574,26 +1570,9 @@ function checkUrlBranding() {
     saveBrandingLocal(customBrand);
     applyBrandingToUI(customBrand);
     
-    state.clientMode = true;
-    
     // Ocultar elementos de administración si están presentes
     const btnLogout = $("btnLogout");
     if (btnLogout) btnLogout.style.display = "none";
-  }
-}
-
-function updateShareUrl() {
-  const input = $("clientShareUrl");
-  const section = $("brandShareUrlSection");
-  if (!input || !section) return;
-
-  if (state.user) {
-    section.style.display = "block";
-    const b = getBranding();
-    const url = `${window.location.origin}${window.location.pathname}?brand=${encodeURIComponent(b.brand_name)}&theme=${b.theme}&accent=${encodeURIComponent(b.accent)}`;
-    input.value = url;
-  } else {
-    section.style.display = "none";
   }
 }
 
@@ -1614,12 +1593,10 @@ async function bootstrapAuth() {
     }
     applyBrandingToUI(state.branding);
     hydrateBrandingUI();
-    updateShareUrl();
 
     setUserBadge();
-    if (!state.clientMode) {
-      $("btnLogout").style.display = "";
-    }
+    $("btnLogout").style.display = "";
+
     // admin tab visibility
     const isAdmin = state.user?.role === "admin";
     $("tabAdmin").style.display = isAdmin ? "" : "none";
@@ -1629,19 +1606,21 @@ async function bootstrapAuth() {
     $("tabMyRecords").style.display = "";
     if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "";
 
-    if (isAdmin) loadAdminUsers().catch(() => {});
+    if (isAdmin) {
+      loadAdminUsers().catch(() => {});
+      renderAdminAuditUI().catch(() => {});
+    }
 
     closeAuthModal();
   } catch {
     // no session: start block and show modal
     state.user = null;
     state.demo = false;
-    if (!state.clientMode) {
-      state.branding = loadBrandingLocal();
-      applyBrandingToUI(state.branding);
-      hydrateBrandingUI();
-    }
-    updateShareUrl();
+    
+    state.branding = loadBrandingLocal();
+    applyBrandingToUI(state.branding);
+    hydrateBrandingUI();
+    
     setUserBadge();
     $("btnLogout").style.display = "none";
     $("tabAdmin").style.display = "none";
@@ -1649,9 +1628,7 @@ async function bootstrapAuth() {
     $("tabMyRecords").style.display = "none";
     if ($("tabMyRecordsMobile")) $("tabMyRecordsMobile").style.display = "none";
     
-    if (!state.clientMode) {
-      openAuthModal("");
-    }
+    openAuthModal("");
   }
 }
 
@@ -3181,182 +3158,94 @@ function saveActiveQuoteToHistory() {
   }
 }
 
-async function renderHistoryUI() {
-  const historyList = $("historyList");
-  if (!historyList) return;
+async function renderAdminAuditUI() {
+  const tbody = $("adminAuditTbody");
+  if (!tbody) return;
 
-  const history = await loadHistory();
-  const searchVal = ($("historySearch")?.value || "").trim().toLowerCase();
-  const filterMode = $("historyFilterMode")?.value || "all";
+  const audits = await loadHistory();
+  const searchVal = ($("adminAuditSearch")?.value || "").trim().toLowerCase();
 
-  const filtered = history.filter(item => {
-    if (filterMode === "cop_ves" && item.direction !== "cop_ves") return false;
-    if (filterMode === "ves_cop" && item.direction !== "ves_cop") return false;
-
-    if (searchVal) {
-      const amtInStr = `${item.inputAmount} ${item.inputCurrency}`.toLowerCase();
-      const amtOutStr = `${item.outputAmount} ${item.outputCurrency}`.toLowerCase();
-      const userStr = String(item.user).toLowerCase();
-      const idStr = String(item.id).toLowerCase();
-      return idStr.includes(searchVal) || userStr.includes(searchVal) || amtInStr.includes(searchVal) || amtOutStr.includes(searchVal);
-    }
-    return true;
-  });
-
-  const count = history.length;
-  let totalVolCop = 0;
-  let totalProfitUsdt = 0;
-
-  history.forEach(item => {
-    if (item.inputCurrency === "COP") {
-      totalVolCop += item.inputAmount;
-    } else if (item.outputCurrency === "COP") {
-      totalVolCop += item.outputAmount;
-    }
+  const filtered = audits.filter(item => {
+    if (!searchVal) return true;
     
-    if (item.profitCurrency === "USDT") {
-      totalProfitUsdt += item.profit;
-    }
+    const userStr = String(item.user || "").toLowerCase();
+    const idStr = String(item.id || "").toLowerCase();
+    const dirStr = String(item.directionLabel || "").toLowerCase();
+    const ratesStr = String(item.rates || "").toLowerCase();
+    const uaStr = String(item.sec_ua || "").toLowerCase();
+    const tzStr = String(item.sec_timezone || "").toLowerCase();
+    const inputAmt = String(item.inputAmount || "").toLowerCase();
+    const outputAmt = String(item.outputAmount || "").toLowerCase();
+
+    return userStr.includes(searchVal) || 
+           idStr.includes(searchVal) || 
+           dirStr.includes(searchVal) || 
+           ratesStr.includes(searchVal) || 
+           uaStr.includes(searchVal) || 
+           tzStr.includes(searchVal) ||
+           inputAmt.includes(searchVal) ||
+           outputAmt.includes(searchVal);
   });
-
-  setText("histCount", String(count));
-  setText("histVolCop", totalVolCop > 0 ? money("COP", totalVolCop, 0) : "—");
-  setText("histProfit", totalProfitUsdt > 0 ? money("USDT", totalProfitUsdt, 2) : "—");
-
-  setText("auditUser", state.user?.email || "Invitado / Sin Sesión");
-  setText("auditNetwork", navigator.onLine ? "● Conectado (HTTPS)" : "● Desconectado");
-  const netEl = $("auditNetwork");
-  if (netEl) netEl.style.color = navigator.onLine ? "var(--ok)" : "var(--bad)";
-  
-  setText("auditTimezone", Intl.DateTimeFormat().resolvedOptions().timeZone || "América/Caracas");
-  setText("auditLang", navigator.language || "es-VE");
 
   if (filtered.length === 0) {
-    historyList.innerHTML = `<div class="hint" style="text-align:center; padding:30px; color:var(--muted)">No se encontraron cotizaciones con los filtros actuales.</div>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="hint" style="text-align:center; padding:30px; color:var(--muted)">No se encontraron registros de auditoría que coincidan con la búsqueda.</td></tr>`;
     return;
   }
 
-  historyList.innerHTML = filtered.map(item => {
+  tbody.innerHTML = filtered.map(item => {
     const formattedDate = new Date(item.timestamp).toLocaleString("es-ES", {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit", second: "2-digit"
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"
     });
 
     const isCopVes = item.direction === "cop_ves";
-    const tagClass = isCopVes ? "in" : "out";
+    const directionBadge = isCopVes
+      ? `<span class="badge" style="background:rgba(46,204,113,0.15); color:var(--ok); font-size:10px; padding:2px 6px; border-radius:4px;">COP ➔ VES</span>`
+      : `<span class="badge" style="background:rgba(78,161,255,0.15); color:var(--accent); font-size:10px; padding:2px 6px; border-radius:4px;">VES ➔ COP</span>`;
+
+    const inputVal = isCopVes 
+      ? money("COP", item.inputAmount, 0) 
+      : (item.inputCurrency === "USD" ? money("USD", item.inputAmount, 2) : money("VES", item.inputAmount, 2));
+
+    const outputVal = money(item.outputCurrency, item.outputAmount, isCopVes ? 2 : 0);
+    const profitVal = money("USDT", item.profit, 2);
 
     return `
-      <div class="audit-card" id="card-${item.id}">
-        <div class="audit-card-header">
-          <span class="audit-tag ${tagClass}">${item.directionLabel}</span>
-          <span class="mono" style="font-size:11px; color:var(--muted);">${formattedDate}</span>
-          <button class="btn xs" onclick="toggleAuditDetails('${item.id}')" style="padding: 2px 8px; font-size:11px; margin-left:auto; border-radius:6px; background:rgba(255,255,255,0.05); cursor:pointer;">Detalles</button>
-        </div>
-        <div class="audit-card-body">
-          <div>
-            <div style="font-size:10px; color:var(--muted);">Entrega</div>
-            <div style="font-weight:700;">${isCopVes ? money("COP", item.inputAmount, 0) : (item.inputCurrency === "USD" ? money("USD", item.inputAmount, 2) : money("VES", item.inputAmount, 2))}</div>
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+        <td class="mono" style="white-space:nowrap; vertical-align:top; font-size:11px; padding:12px 8px;">${formattedDate}</td>
+        <td style="vertical-align:top; padding:12px 8px;">
+          <div style="font-weight:700; font-size:13px; color:var(--text); word-break:break-all;">${escapeHtml(item.user)}</div>
+          <div style="font-size:10px; color:var(--muted); margin-top:2px;" class="mono">ID: ${item.id}</div>
+        </td>
+        <td style="vertical-align:top; padding:12px 8px;">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+            ${directionBadge}
+            <span style="font-size:11px; color:var(--ok); font-weight:700;">+${profitVal} ganancia</span>
           </div>
-          <div>
-            <div style="font-size:10px; color:var(--muted);">Recibe</div>
-            <div style="font-weight:700; color:var(--accent);">${money(item.outputCurrency, item.outputAmount, isCopVes ? 2 : 0)}</div>
+          <div style="font-size:12px; line-height:1.4;">
+            Entregó: <span style="font-weight:600; color:var(--text);">${inputVal}</span> ➔ Recibió: <span style="font-weight:600; color:var(--accent);">${outputVal}</span>
           </div>
-          <div>
-            <div style="font-size:10px; color:var(--muted);">Ganancia</div>
-            <div style="font-weight:700; color:var(--ok);">${money("USDT", item.profit, 2)}</div>
+          <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="mono">
+            Tasas: ${escapeHtml(item.rates || "N/A")}
           </div>
-          
-          <div id="details-${item.id}" class="audit-card-details" style="display:none;">
-            <div class="audit-detail-row">
-              <span style="color:var(--muted)">ID Cotización:</span>
-              <span class="mono">${item.id}</span>
-            </div>
-            <div class="audit-detail-row">
-              <span style="color:var(--muted)">Usuario:</span>
-              <span class="mono">${item.user}</span>
-            </div>
-            <div class="audit-detail-row">
-              <span style="color:var(--muted)">Tasas de cambio:</span>
-              <span style="font-size:11px;">${item.rates}</span>
-            </div>
-            <div class="audit-detail-row">
-              <span style="color:var(--muted)">Dispositivo / Browser:</span>
-              <span>${item.sec_ua}</span>
-            </div>
-            <div class="audit-detail-row">
-              <span style="color:var(--muted)">Zona Horaria:</span>
-              <span class="mono">${item.sec_timezone}</span>
-            </div>
-            <div class="audit-detail-row">
-              <span style="color:var(--muted)">Canal IP:</span>
-              <span class="mono" style="color:var(--accent)">Encapsulado Cloudflare CDN (Secure Audit)</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        </td>
+        <td style="vertical-align:top; padding:12px 8px; font-size:11px; color:var(--muted);">
+          <div class="mono" style="margin-bottom:2px; color:var(--text);">🌍 ${escapeHtml(item.sec_timezone || "Desconocida")}</div>
+          <div style="font-size:10px; line-height:1.3;">📱 ${escapeHtml(item.sec_ua || "Dispositivo desconocido")}</div>
+          <div style="font-size:9px; color:var(--muted); margin-top:2px;">Conexión Segura Cloudflare TLS (Audit IP)</div>
+        </td>
+      </tr>
     `;
   }).join("");
 }
 
-window.toggleAuditDetails = function(id) {
-  const panel = document.getElementById(`details-${id}`);
-  if (panel) {
-    const isHidden = panel.style.display === "none";
-    panel.style.display = isHidden ? "block" : "none";
-  }
-};
-
-async function exportHistoryCSV() {
-  const history = await loadHistory();
-  if (history.length === 0) {
-    alert("No hay cotizaciones para exportar.");
-    return;
-  }
-
-  const headers = ["ID", "Fecha UTC", "Usuario", "Direccion", "Monto Entrada", "Moneda Entrada", "Monto Salida", "Moneda Salida", "Ganancia (USDT)", "Tasas", "Dispositivo", "Zona Horaria", "Estado Red"];
-  const rows = [headers];
-
-  history.forEach(item => {
-    rows.push([
-      item.id,
-      item.timestamp,
-      item.user,
-      item.directionLabel,
-      item.inputAmount,
-      item.inputCurrency,
-      item.outputAmount,
-      item.outputCurrency,
-      item.profit,
-      `"${item.rates.replace(/"/g, '""')}"`,
-      item.sec_ua,
-      item.sec_timezone,
-      item.sec_online
-    ]);
-  });
-
-  const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(",")).join("\n");
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `auditoria_caze_${new Date().toISOString().split('T')[0]}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
-async function clearHistory() {
-  if (confirm("¿Estás seguro de que deseas limpiar todo el historial de auditoría de este dispositivo? Esta acción no se puede deshacer.")) {
-    saveHistory([]);
-    await renderHistoryUI();
+async function renderHistoryUI() {
+  if (state.user?.role === "admin") {
+    await renderAdminAuditUI();
   }
 }
 
-// Wire up events for History Tab
 function wireHistoryTabEvents() {
-  $("historySearch")?.addEventListener("input", renderHistoryUI);
-  $("historyFilterMode")?.addEventListener("change", renderHistoryUI);
-  $("btnHistExport")?.addEventListener("click", exportHistoryCSV);
-  $("btnHistClear")?.addEventListener("click", clearHistory);
+  $("adminAuditSearch")?.addEventListener("input", renderAdminAuditUI);
 }
 
 // ---------- NUEVAS FUNCIONES DE 'MIS REGISTROS' (CAJA DIARIA DEL SUSCRIPTOR) ----------
