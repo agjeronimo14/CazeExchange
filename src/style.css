@@ -737,3 +737,79 @@ input.readonly{
   font-size: 13px;
 }
 
+/* Custom styles for A1/A2 Client Mode and dropzones */
+.hidden {
+  display: none !important;
+}
+
+#receiptDropzone {
+  border: 2px dashed rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(255,255,255,0.01);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+}
+
+#receiptDropzone:hover, #receiptDropzone.dragover {
+  background: rgba(var(--accent-rgb), 0.05);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.audit-card.pending {
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  background: linear-gradient(135deg, rgba(255, 176, 32, 0.03), rgba(0, 0, 0, 0));
+  box-shadow: 0 0 10px rgba(255, 176, 32, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.audit-card.pending::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--warn);
+}
+
+.badge-pending {
+  background: rgba(255, 176, 32, 0.15);
+  color: var(--warn);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 176, 32, 0.25);
+  animation: pulse-orange 2s infinite;
+}
+
+@keyframes pulse-orange {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+.badge-cancelled {
+  background: rgba(255, 90, 106, 0.15);
+  color: var(--bad);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 90, 106, 0.25);
+}
+
+.badge-completed {
+  background: rgba(36, 193, 106, 0.15);
+  color: var(--ok);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(36, 193, 106, 0.25);
+}
+
+

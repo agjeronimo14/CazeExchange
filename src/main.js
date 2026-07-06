@@ -105,6 +105,10 @@ function normalizeBranding(input = {}) {
   if (name.length > 40) name = name.slice(0, 40).trim();
   out.brand_name = name;
 
+  // Preserve accounts
+  out.receive_cop = parsed.receive_cop || parsed.receiveCop || "";
+  out.receive_ves = parsed.receive_ves || parsed.receiveVes || "";
+
   // Preserve operations!
   if (Array.isArray(parsed.operations)) {
     out.operations = parsed.operations;
@@ -183,10 +187,15 @@ function hydrateBrandingUI() {
   const themeEl = document.getElementById("brandTheme");
   const accentEl = document.getElementById("brandAccent");
   const pickEl = document.getElementById("brandAccentPicker");
-  if (nameEl) nameEl.value = b.brand_name;
-  if (themeEl) themeEl.value = b.theme;
-  if (accentEl) accentEl.value = b.accent;
-  if (pickEl) pickEl.value = b.accent;
+  const receiveCopEl = document.getElementById("brandReceiveCop");
+  const receiveVesEl = document.getElementById("brandReceiveVes");
+
+  if (nameEl) nameEl.value = b.brand_name || "";
+  if (themeEl) themeEl.value = b.theme || "ocean";
+  if (accentEl) accentEl.value = b.accent || "";
+  if (pickEl) pickEl.value = b.accent || "";
+  if (receiveCopEl) receiveCopEl.value = b.receive_cop || "";
+  if (receiveVesEl) receiveVesEl.value = b.receive_ves || "";
 
   const saveBtn = document.getElementById("btnBrandSave");
   if (saveBtn) saveBtn.disabled = !state.user;
@@ -200,10 +209,14 @@ function hydrateBrandingUI() {
 }
 
 function readBrandingFromUI() {
+  const current = getBranding();
   return normalizeBranding({
     brand_name: document.getElementById("brandName")?.value,
     theme: document.getElementById("brandTheme")?.value,
     accent: document.getElementById("brandAccent")?.value,
+    receive_cop: document.getElementById("brandReceiveCop")?.value,
+    receive_ves: document.getElementById("brandReceiveVes")?.value,
+    operations: current.operations
   });
 }
 
@@ -802,33 +815,37 @@ No encuentro #app. Revisa index.html y deja: <div id="app"></div>
 }
 
 mount.innerHTML = `
-  <div class="container">
-    <div class="header">
-      <div class="brand">
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <h1 style="margin:0">Remesas (COP → USDT → VES)</h1>
-          <span class="badge mono" id="brandBadge">CAZEEXCHANGE</span>
-          <span id="ratesBadge" class="badge mono">Tasas: —</span>
+  <div id="operatorView">
+    <div class="container">
+      <div class="header">
+        <div class="brand">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+            <h1 style="margin:0">Remesas (COP → USDT → VES)</h1>
+            <span class="badge mono" id="brandBadge">CAZEEXCHANGE</span>
+            <span id="ratesBadge" class="badge mono">Tasas: —</span>
+          </div>
+          <small id="userBadge" class="badge">Sin sesión activa</small>
         </div>
-        <small id="userBadge" class="badge">Sin sesión activa</small>
-      </div>
-      <div class="actions">
-        <!-- Tasa en vivo pulsing dot -->
-        <div id="liveBadge" class="live-badge no-export" style="display:none;">
-          <span class="pulse-dot"></span>
-          <span id="liveTimerText">En vivo: 30s</span>
+        <div class="actions">
+          <!-- Tasa en vivo pulsing dot -->
+          <div id="liveBadge" class="live-badge no-export" style="display:none;">
+            <span class="pulse-dot"></span>
+            <span id="liveTimerText">En vivo: 30s</span>
+          </div>
+
+          <!-- PWA install button -->
+          <button id="btnPWAInstall" class="pwa-badge no-export" style="display:none; border:none; padding: 4px 10px; height: auto;">
+            <span>📲 Instalar App</span>
+          </button>
+
+          <!-- Toggle Client Mode -->
+          <button id="btnToggleClientMode" class="btn success no-export" style="background:rgba(36,193,106,0.15); border-color:rgba(36,193,106,0.3); color:var(--ok); font-weight:700;" type="button">👥 Modo Cliente</button>
+
+          <button id="btnUpdate" class="btn primary">Actualizar tasas</button>
+          <button id="btnLogout" class="btn" style="display:none">Salir</button>
+          <span id="status" class="badge mono">Listo</span>
         </div>
-
-        <!-- PWA install button -->
-        <button id="btnPWAInstall" class="pwa-badge no-export" style="display:none; border:none; padding: 4px 10px; height: auto;">
-          <span>📲 Instalar App</span>
-        </button>
-
-        <button id="btnUpdate" class="btn primary">Actualizar tasas</button>
-        <button id="btnLogout" class="btn" style="display:none">Salir</button>
-        <span id="status" class="badge mono">Listo</span>
       </div>
-    </div>
 
     <div class="tabsTop" role="tablist" aria-label="Navegación">
       <button class="tabBtn active" data-tab="quote" id="tabQuote" type="button">De COP a VES</button>
@@ -1022,7 +1039,18 @@ mount.innerHTML = `
             </div>
           </div>
 
-          <div class="row" style="align-items:center">
+          <div class="row" style="margin-top: 10px;">
+            <div class="field">
+              <label>Cuentas para recibir Pesos Colombianos (COP) [Modo Cliente]</label>
+              <input id="brandReceiveCop" placeholder="Ej: Bancolombia Ahorros Nro 123-456789-01, Titular: CazeExchange SAS" />
+            </div>
+            <div class="field">
+              <label>Cuentas para recibir Bolívares (VES) [Modo Cliente]</label>
+              <input id="brandReceiveVes" placeholder="Ej: Pago Móvil Banesco 0412-1234567 Cédula: V-12345678" />
+            </div>
+          </div>
+
+          <div class="row" style="align-items:center; margin-top: 14px;">
             <button id="btnBrandSave" class="btn primary" type="button">Guardar branding</button>
             <button id="btnBrandReset" class="btn" type="button">Restablecer</button>
             <span id="brandMsg" class="hint" style="margin-left:auto"></span>
@@ -1283,12 +1311,15 @@ mount.innerHTML = `
               <label>Buscar operación registrada</label>
               <input id="myRecordsSearch" placeholder="Escribe para buscar..." style="padding: 8px 12px;" />
             </div>
-            <div class="field" style="max-width:140px">
-              <label>Dirección</label>
+            <div class="field" style="max-width:180px">
+              <label>Filtro / Estado</label>
               <select id="myRecordsFilterMode" style="padding: 8px 12px;">
-                <option value="all">Todas</option>
-                <option value="cop_ves">COP ➔ VES</option>
-                <option value="ves_cop">VES ➔ COP</option>
+                <option value="all">Ver Todas</option>
+                <option value="pendiente">Solo Pendientes 🟠</option>
+                <option value="completada">Solo Completadas ✓</option>
+                <option value="cancelada">Solo Canceladas ❌</option>
+                <option value="cop_ves">Dirección: COP ➔ VES</option>
+                <option value="ves_cop">Dirección: VES ➔ COP</option>
               </select>
             </div>
           </div>
@@ -1524,6 +1555,222 @@ mount.innerHTML = `
           </div>
         </section>
       </div>
+    </div>
+  </div> <!-- operatorView -->
+
+  <!-- Client Mode View (A1 & A2) -->
+  <div id="clientView" class="hidden" style="min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);">
+    <div class="container" style="max-width: 600px; margin: 0 auto; padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+      
+      <!-- Brand Header -->
+      <div class="header" style="margin-bottom: 24px; text-align: center; display: flex; flex-direction: column; gap: 8px; padding: 20px; border-radius: 20px; background: var(--glass); backdrop-filter: blur(12px);">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+          <span style="font-size: 28px;">💱</span>
+          <h1 id="clientBrandName" style="margin: 0; font-size: 24px; font-weight: 800; tracking: 0.5px; color: var(--accent);">CAZEEXCHANGE</h1>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: var(--muted); font-weight: 500;">Calculadora de Envíos de Remesas Automatizados</p>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px;">
+          <span class="pulse-dot"></span>
+          <span style="font-size: 11px; font-weight: 600; color: var(--ok); text-transform: uppercase; letter-spacing: 0.5px;">Tasa en tiempo real</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Calculator -->
+      <div id="clientStepCalculator" class="card" style="padding: 24px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+        <h2 style="font-size: 16px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; text-align: center;">Calcula tu Envío</h2>
+        
+        <!-- Direction Selector (COP->VES or VES->COP) -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <button id="btnClientDirCopVes" class="btn active" style="flex: 1; font-weight: 700; padding: 12px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px;" type="button">
+            <span style="font-size: 18px;">🇨🇴 ➔ 🇻🇪</span>
+            <span style="font-size: 11px;">COP a VES</span>
+          </button>
+          <button id="btnClientDirVesCop" class="btn" style="flex: 1; font-weight: 700; padding: 12px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px;" type="button">
+            <span style="font-size: 18px;">🇻🇪 ➔ 🇨🇴</span>
+            <span style="font-size: 11px;">VES a COP</span>
+          </button>
+        </div>
+
+        <!-- Input Amount -->
+        <div class="field" style="margin-bottom: 18px;">
+          <label style="font-weight: 600; font-size: 13px;" id="lblClientSend">Tú envías (Pesos Colombianos)</label>
+          <div style="position: relative;">
+            <input id="clientInAmount" type="number" inputmode="decimal" placeholder="0.00" style="padding: 14px 60px 14px 16px; font-size: 18px; font-weight: 700; font-family: monospace; border-radius: 14px;" />
+            <span id="clientInCurrencyBadge" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--accent); font-size: 14px;">COP</span>
+          </div>
+        </div>
+
+        <!-- Rate Box -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 14px; padding: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 12px; color: var(--muted); font-weight: 500;">Tasa de cambio aplicada:</div>
+          <div id="clientRateVal" style="font-weight: 700; color: var(--text); font-family: monospace; font-size: 14px;">—</div>
+        </div>
+
+        <!-- Output Amount -->
+        <div class="field" style="margin-bottom: 24px;">
+          <label style="font-weight: 600; font-size: 13px;" id="lblClientReceive">Tu beneficiario recibe (Bolívares Digitales)</label>
+          <div style="position: relative;">
+            <input id="clientOutAmount" type="number" inputmode="decimal" placeholder="0.00" style="padding: 14px 60px 14px 16px; font-size: 18px; font-weight: 700; font-family: monospace; border-radius: 14px;" />
+            <span id="clientOutCurrencyBadge" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--ok); font-size: 14px;">VES</span>
+          </div>
+        </div>
+
+        <button id="btnClientNext" class="btn primary" style="width: 100%; padding: 14px; font-size: 16px; font-weight: 700; border-radius: 14px;" type="button">Siguiente: Datos de Envío ➔</button>
+      </div>
+
+      <!-- Step 2: Checkout -->
+      <div id="clientStepCheckout" class="card hidden" style="padding: 24px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+        <h2 style="font-size: 16px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; text-align: center;">Datos del Envío</h2>
+        
+        <div style="background: rgba(var(--accent-rgb), 0.05); border: 1px solid rgba(var(--accent-rgb), 0.2); border-radius: 12px; padding: 12px; margin-bottom: 20px; text-align: center;">
+          <div style="font-size: 11px; color: var(--muted);">Resumen de Cotización</div>
+          <div style="font-size: 16px; font-weight: 800; margin-top: 4px;" id="clientCheckoutSummaryText">0 COP ➔ 0 VES</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px; max-height: 380px; overflow-y: auto; padding-right: 4px; margin-bottom: 20px;">
+          <!-- Sender info -->
+          <div style="border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+            <h3 style="margin: 0 0 10px 0; font-size: 13px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">1. Datos de quien envía</h3>
+            <div class="row">
+              <div class="field">
+                <label>Tu Nombre Completo</label>
+                <input id="checkoutSenderName" placeholder="Ej: Juan Pérez" />
+              </div>
+              <div class="field">
+                <label>Tu WhatsApp / Teléfono</label>
+                <input id="checkoutSenderPhone" inputmode="tel" placeholder="Ej: +57 300 1234567" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Beneficiary info -->
+          <div style="border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+            <h3 style="margin: 0 0 10px 0; font-size: 13px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">2. Datos de quien recibe (Beneficiario)</h3>
+            
+            <div class="field" style="margin-bottom: 10px;">
+              <label>Banco Destinatario</label>
+              <select id="checkoutBeneBank" style="border-radius:10px;"></select>
+            </div>
+
+            <div class="row" style="margin-bottom: 10px;">
+              <div class="field">
+                <label>Tipo de Operación</label>
+                <select id="checkoutBeneType" style="border-radius:10px;">
+                  <option value="pago_movil">Pago Móvil</option>
+                  <option value="transferencia">Transferencia Bancaria</option>
+                </select>
+              </div>
+              <div class="field">
+                <label id="lblCheckoutBeneDoc">Documento (V / E / J / G)</label>
+                <div style="display:flex; gap:6px;">
+                  <select id="checkoutBeneDocType" style="max-width: 65px; padding:8px; border-radius:10px;">
+                    <option value="V">V</option>
+                    <option value="E">E</option>
+                    <option value="J">J</option>
+                    <option value="G">G</option>
+                  </select>
+                  <input id="checkoutBeneDoc" inputmode="numeric" placeholder="12345678" style="flex:1;" />
+                </div>
+              </div>
+            </div>
+
+            <div class="field" style="margin-bottom: 10px;">
+              <label id="lblCheckoutBeneAccount">Número de Celular o Cuenta</label>
+              <input id="checkoutBeneAccount" placeholder="Celular (Pago Móvil) o Cuenta de 20 dígitos" />
+              <small class="hint" id="checkoutBeneAccountHint" style="font-size: 10px; color: var(--muted); margin-top:2px;">Pago móvil: Solo teléfono. Transferencia: 20 dígitos.</small>
+            </div>
+
+            <div class="field">
+              <label>Nombre del Titular de la Cuenta</label>
+              <input id="checkoutBeneName" placeholder="Ej: María Rodríguez" />
+            </div>
+          </div>
+
+          <!-- Proof of payment dropzone -->
+          <div>
+            <h3 style="margin: 0 0 10px 0; font-size: 13px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">3. Comprobante de Transferencia (Cargar Pago)</h3>
+            <p class="hint" style="margin: 0 0 10px 0; font-size:11px;">Transfiere a las cuentas autorizadas que verás abajo y adjunta una captura de pantalla del pago para su aprobación inmediata.</p>
+            
+            <div id="receiptDropzone">
+              <span style="font-size: 24px; display: block; margin-bottom: 6px;">📸</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--text);">Arrastra o haz clic para subir captura de pantalla</span>
+              <span style="font-size: 10px; color: var(--muted); display: block; margin-top: 4px;">Formatos admitidos: PNG, JPG, JPEG</span>
+              <input type="file" id="receiptFileInput" accept="image/*" style="display: none;" />
+            </div>
+            
+            <div id="receiptFilePreview" style="text-align: center; margin-top: 10px;"></div>
+          </div>
+
+          <!-- Instructions accounts info (Interactive Receiver Details) -->
+          <div style="background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 12px; padding: 14px; margin-top: 10px;">
+            <h4 style="margin: 0 0 8px 0; font-size: 12px; color: var(--ok); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Cuentas de Recepción Autorizadas</h4>
+            <div id="clientReceiverAccounts" style="font-size: 11px; line-height: 1.5; color: var(--text);">
+              <!-- Cuentas inyectadas dinámicamente -->
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button id="btnClientBackToCalc" class="btn" style="flex: 1; padding: 12px; font-weight: 600;" type="button">⬅️ Volver</button>
+          <button id="btnClientSubmit" class="btn success" style="flex: 2; padding: 12px; font-weight: 700; background: rgba(36,193,106,0.18); border-color: rgba(36,193,106,0.35); color: var(--ok);" type="button">Confirmar y Registrar Envío</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Success -->
+      <div id="clientStepSuccess" class="card hidden" style="padding: 24px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); text-align: center;">
+        <div style="width: 60px; height: 60px; background: rgba(36,193,106,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+          <span style="font-size: 32px; color: var(--ok);">✓</span>
+        </div>
+        <h2 style="font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 8px;">¡Solicitud Registrada con Éxito!</h2>
+        <p class="hint" style="margin-bottom: 20px; font-size: 13px;">Tu operación está siendo procesada bajo el ID de operación de abajo. Haz clic en el botón verde para contactar por WhatsApp y acelerar el cambio.</p>
+
+        <!-- Dynamic Success Receipt Voucher Card -->
+        <div id="clientSuccessTicket" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 14px; padding: 16px; text-align: left; margin-bottom: 24px; font-family: monospace; font-size: 12px; position: relative;">
+          <div style="font-size: 14px; font-weight: 800; border-bottom: 1px dashed var(--border); padding-bottom: 8px; margin-bottom: 10px; color: var(--accent); display:flex; justify-content:space-between;">
+            <span>DETALLE DEL ENVÍO</span>
+            <span id="successTicketId">REG-123456</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div><strong>Remitente:</strong> <span id="successSender">Juan Pérez</span></div>
+            <div><strong>WhatsApp:</strong> <span id="successPhone">+57 300 1234567</span></div>
+            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 6px 0;" />
+            <div><strong>Monto Enviado:</strong> <span id="successSendAmount" style="font-weight: 700; color: var(--ok);">—</span></div>
+            <div><strong>Monto a Recibir:</strong> <span id="successReceiveAmount" style="font-weight: 700; color: var(--accent);">—</span></div>
+            <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 6px 0;" />
+            <div><strong>Beneficiario:</strong> <span id="successBeneName">Maria Pérez</span></div>
+            <div><strong>Banco:</strong> <span id="successBeneBank">Banesco</span></div>
+            <div><strong>Cuenta/Celular:</strong> <span id="successBeneAccount">0134...</span></div>
+            <div><strong>Documento:</strong> <span id="successBeneDoc">V-12345678</span></div>
+            <div style="margin-top: 6px; font-size: 10px; color: var(--muted); text-align: center;" id="successTicketDate">Fecha: 05/07/2026, 17:20</div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button id="btnClientWhatsappShare" class="btn primary" style="width: 100%; padding: 14px; font-weight: 700; background: #25d366; color: #000; border: none; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;" type="button">
+            <span>🟢 Enviar Comprobante por WhatsApp</span>
+          </button>
+          <button id="btnClientNewQuote" class="btn" style="width: 100%; padding: 12px; font-weight: 600;" type="button">Realizar otra cotización</button>
+        </div>
+      </div>
+
+      <!-- Footer action: Return to Admin / Operator -->
+      <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.03);">
+        <button id="btnExitClientMode" class="btn xs" style="border: none; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer;" type="button">
+          🔑 Volver a Modo Operador (Solo Administrador)
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Image Lightbox Modal -->
+  <div id="imageLightboxModal" class="modal hidden" aria-hidden="true" style="overflow-y: auto;">
+    <div class="modalCard" style="max-width: 500px; padding: 20px; text-align: center; position: relative;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3 style="margin:0; font-size:16px;">📸 Comprobante de Pago</h3>
+        <button id="btnLightboxClose" class="btn xs" style="border:none; background:transparent; font-size:18px; cursor:pointer; color:var(--muted);">&times;</button>
+      </div>
+      <img id="lightboxImage" src="" style="width: 100%; max-height: 500px; object-fit: contain; border-radius: 8px; border: 1px solid var(--border);" />
     </div>
   </div>
 
@@ -3862,6 +4109,11 @@ function renderMyRecordsUI() {
   const filterMode = $("myRecordsFilterMode")?.value || "all";
 
   const filtered = records.filter(item => {
+    const status = item.status || "completada";
+    if (filterMode === "pendiente" && status !== "pendiente") return false;
+    if (filterMode === "completada" && status !== "completada") return false;
+    if (filterMode === "cancelada" && status !== "cancelada") return false;
+
     if (filterMode === "cop_ves" && item.direction !== "cop_ves") return false;
     if (filterMode === "ves_cop" && item.direction !== "ves_cop") return false;
 
@@ -3869,7 +4121,15 @@ function renderMyRecordsUI() {
       const amtInStr = `${item.inputAmount} ${item.inputCurrency}`.toLowerCase();
       const amtOutStr = `${item.outputAmount} ${item.outputCurrency}`.toLowerCase();
       const idStr = String(item.id).toLowerCase();
-      return idStr.includes(searchVal) || amtInStr.includes(searchVal) || amtOutStr.includes(searchVal);
+      const sender = String(item.senderName || "").toLowerCase();
+      const bene = String(item.beneficiaryName || "").toLowerCase();
+      const bank = String(item.beneficiaryBank || "").toLowerCase();
+      return idStr.includes(searchVal) || 
+             amtInStr.includes(searchVal) || 
+             amtOutStr.includes(searchVal) ||
+             sender.includes(searchVal) ||
+             bene.includes(searchVal) ||
+             bank.includes(searchVal);
     }
     return true;
   });
@@ -3879,6 +4139,9 @@ function renderMyRecordsUI() {
   let totalProfitUsdt = 0;
 
   records.forEach(item => {
+    // Only completed records count towards calculated totals
+    if (item.status && item.status !== "completada") return;
+
     if (item.inputCurrency === "COP") {
       totalVolCop += item.inputAmount;
     } else if (item.outputCurrency === "COP") {
@@ -3906,16 +4169,70 @@ function renderMyRecordsUI() {
     });
 
     const isCopVes = item.direction === "cop_ves";
-    const tagClass = isCopVes ? "in" : "out";
+    const status = item.status || "completada";
+    
+    let tagHtml = "";
+    let cardClass = "audit-card";
+    if (status === "pendiente") {
+      tagHtml = `<span class="badge-pending">PENDIENTE 🟠</span>`;
+      cardClass = "audit-card pending";
+    } else if (status === "cancelada") {
+      tagHtml = `<span class="badge-cancelled">CANCELADA ❌</span>`;
+    } else {
+      tagHtml = `<span class="badge-completed">COMPLETADA ✓</span>`;
+    }
+
+    const directionBadge = `<span class="audit-tag ${isCopVes ? 'in' : 'out'}">${item.directionLabel}</span>`;
+
+    let actionButtonsHtml = "";
+    if (status === "pendiente") {
+      actionButtonsHtml = `
+        <button class="btn xs success" onclick="approvePendingRecord('${item.id}')" style="padding: 4px 10px; font-size:11px; border-radius:6px; background:rgba(36,193,106,0.15); color:var(--ok); border:none; cursor:pointer; font-weight:700;">✅ Completar</button>
+        <button class="btn xs" onclick="rejectPendingRecord('${item.id}')" style="padding: 4px 10px; font-size:11px; border-radius:6px; background:rgba(255,90,106,0.1); color:var(--bad); border:none; cursor:pointer; font-weight:700;">❌ Cancelar</button>
+      `;
+    } else {
+      actionButtonsHtml = `
+        <button class="btn xs" onclick="viewMyRecordReceipt('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(78,161,255,0.12); color:var(--accent); border:none; cursor:pointer; font-weight:600;">🧾 Recibo</button>
+        <button class="btn xs" onclick="deleteMyRecord('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(255,90,106,0.1); color:var(--bad); border:none; cursor:pointer;">Eliminar</button>
+      `;
+    }
+
+    let viewReceiptBtn = "";
+    if (item.receiptImage) {
+      viewReceiptBtn = `
+        <button class="btn xs" onclick="showImageLightbox('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(255,255,255,0.06); color:var(--text); border:1px solid var(--border); cursor:pointer; font-weight:600;">📸 Ver Pago</button>
+      `;
+    }
+
+    let detailsHtml = "";
+    if (item.senderName || item.beneficiaryName) {
+      detailsHtml = `
+        <div style="margin-top: 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 11px; display: flex; flex-direction: column; gap: 6px;">
+          ${item.senderName ? `<div><span style="color:var(--muted);">Remitente:</span> <strong>${escapeHtml(item.senderName)}</strong> ${item.senderPhone ? `(<a href="https://wa.me/${item.senderPhone.replace(/[^0-9]/g, '')}" target="_blank" style="color:var(--ok);">${escapeHtml(item.senderPhone)}</a>)` : ''}</div>` : ''}
+          ${item.beneficiaryName ? `
+            <div>
+              <span style="color:var(--muted);">Beneficiario:</span> <strong>${escapeHtml(item.beneficiaryName)}</strong> 
+              <br/>
+              <span style="color:var(--muted);">Banco:</span> ${escapeHtml(item.beneficiaryBank)} | 
+              <span style="color:var(--muted);">Tipo:</span> ${escapeHtml(item.beneficiaryType === 'pago_movil' ? 'Pago Móvil' : 'Transferencia')} | 
+              <span style="color:var(--muted);">Doc:</span> ${escapeHtml(item.beneficiaryDocType)}-${escapeHtml(item.beneficiaryDoc)}
+              <br/>
+              <span style="color:var(--muted);">Cuenta/Celular:</span> <span class="mono" style="font-weight:700; color:var(--accent);">${escapeHtml(item.beneficiaryAccount)}</span>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
 
     return `
-      <div class="audit-card">
-        <div class="audit-card-header" style="align-items:center;">
-          <span class="audit-tag ${tagClass}">${item.directionLabel}</span>
+      <div class="${cardClass}">
+        <div class="audit-card-header" style="align-items:center; gap: 8px; flex-wrap:wrap;">
+          ${directionBadge}
+          ${tagHtml}
           <span class="mono" style="font-size:11px; color:var(--muted);">${formattedDate}</span>
-          <div style="margin-left:auto; display:flex; gap:6px;">
-            <button class="btn xs" onclick="viewMyRecordReceipt('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(78,161,255,0.12); color:var(--accent); border:none; cursor:pointer; font-weight:600;">🧾 Recibo</button>
-            <button class="btn xs" onclick="deleteMyRecord('${item.id}')" style="padding: 2px 8px; font-size:11px; border-radius:6px; background:rgba(255,90,106,0.1); color:var(--bad); border:none; cursor:pointer;">Eliminar</button>
+          <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+            ${viewReceiptBtn}
+            ${actionButtonsHtml}
           </div>
         </div>
         <div class="audit-card-body" style="grid-template-columns: repeat(3, 1fr); margin-top:8px;">
@@ -3932,6 +4249,7 @@ function renderMyRecordsUI() {
             <div style="font-weight:700; color:var(--ok);">${money("USDT", item.profit, 2)}</div>
           </div>
         </div>
+        ${detailsHtml}
         <div style="margin-top:6px; font-size:10px; color:var(--muted); font-family:monospace; border-top:1px solid rgba(255,255,255,0.02); padding-top:4px;">
           ID: ${item.id} | Tasas: ${item.rates}
         </div>
@@ -3940,6 +4258,49 @@ function renderMyRecordsUI() {
   }).join("");
 }
 
+function approvePendingRecord(id) {
+  if (confirm(`¿Estás seguro de completar esta transacción ${id}? Se cambiará su estado a Completada y se abrirá el comprobante.`)) {
+    const records = loadMyRecords();
+    const entry = records.find(r => r.id === id);
+    if (entry) {
+      entry.status = "completada";
+      saveMyRecords(records);
+      renderMyRecordsUI();
+      showReceiptModal(entry);
+    }
+  }
+}
+
+function rejectPendingRecord(id) {
+  if (confirm(`¿Seguro que deseas rechazar/cancelar la transacción ${id}? Se guardará como Cancelada.`)) {
+    const records = loadMyRecords();
+    const entry = records.find(r => r.id === id);
+    if (entry) {
+      entry.status = "cancelada";
+      saveMyRecords(records);
+      renderMyRecordsUI();
+    }
+  }
+}
+
+function showImageLightbox(id) {
+  const records = loadMyRecords();
+  const entry = records.find(r => r.id === id);
+  if (entry && entry.receiptImage) {
+    const modal = $("imageLightboxModal");
+    const img = $("lightboxImage");
+    if (modal && img) {
+      img.src = entry.receiptImage;
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+    }
+  }
+}
+
+window.approvePendingRecord = approvePendingRecord;
+window.rejectPendingRecord = rejectPendingRecord;
+window.showImageLightbox = showImageLightbox;
+
 function exportMyRecordsCSV() {
   const records = loadMyRecords();
   if (records.length === 0) {
@@ -3947,7 +4308,7 @@ function exportMyRecordsCSV() {
     return;
   }
 
-  const headers = ["ID", "Fecha", "Direccion", "Monto Entrada", "Moneda Entrada", "Monto Salida", "Moneda Salida", "Ganancia (USDT)", "Tasas Aplicadas"];
+  const headers = ["ID", "Fecha", "Direccion", "Monto Entrada", "Moneda Entrada", "Monto Salida", "Moneda Salida", "Ganancia (USDT)", "Estado", "Tasas Aplicadas"];
   const rows = [headers];
 
   records.forEach(item => {
@@ -3960,6 +4321,7 @@ function exportMyRecordsCSV() {
       item.outputAmount,
       item.outputCurrency,
       item.profit,
+      item.status || "completada",
       `"${item.rates.replace(/"/g, '""')}"`
     ]);
   });
@@ -4008,6 +4370,7 @@ function registerCurrentQuote() {
     outputCurrency: "VES",
     profit: active.feeUsdt,
     profitCurrency: "USDT",
+    status: "completada",
     rates: `USDT/COP: ${parseNum($("usdtCopBuy")?.value)} | USDT/VES: ${parseNum($("usdtVesSell")?.value)}`
   };
 
@@ -4083,6 +4446,7 @@ function registerCurrentVesToCop() {
     outputCurrency: "COP",
     profit: feeUsdt,
     profitCurrency: "USDT",
+    status: "completada",
     rates: `USDT/COP: ${vesUsdtCopBuy} | USDT/VES: ${rateVesPerUsd}`
   };
 
@@ -4101,17 +4465,571 @@ function wireMyRecordsTabEvents() {
   $("btnMyRecExport")?.addEventListener("click", exportMyRecordsCSV);
   $("btnMyRecClear")?.addEventListener("click", clearMyRecords);
 
-  // Registro desde calculadoras
-  // El botón de COP a VES se inyecta dinámicamente en applyPhase2Layout
-  // así que usaremos delegación de eventos en el colRight
   $("colRight")?.addEventListener("click", (e) => {
     if (e.target && e.target.id === "btnManualRegister") {
       registerCurrentQuote();
     }
   });
 
-  // El botón de VES a COP es estático
   $("btnManualRegisterVes")?.addEventListener("click", registerCurrentVesToCop);
+}
+
+// ---------- A1 & A2 CLIENT MODE MODULE ----------
+const VENEZUELAN_BANKS = [
+  "Banesco Banco Universal",
+  "Banco de Venezuela",
+  "Mercantil Banco",
+  "BBVA Provincial",
+  "Banco Nacional de Crédito (BNC)",
+  "Bancamiga",
+  "Banco Occidental de Descuento (BOD)",
+  "Banco Exterior",
+  "Banco Plaza",
+  "Banco Sofitasa",
+  "Bancrecer",
+  "100% Banco",
+  "DelSur",
+  "Mi Banco",
+  "Banplus"
+];
+
+const COLOMBIAN_BANKS = [
+  "Bancolombia",
+  "Nequi",
+  "Daviplata",
+  "Banco Davivienda",
+  "Banco de Bogotá",
+  "BBVA Colombia",
+  "Banco de Occidente",
+  "Banco Popular",
+  "Banco AV Villas",
+  "Banco Caja Social",
+  "Banco GNB Sudameris",
+  "Banco Falabella",
+  "Banco Pichincha",
+  "Scotiabank Colpatria",
+  "Lulo Bank",
+  "RappiPay"
+];
+
+// Active state for Client mode
+state.activeClientDir = "cop_ves"; // default
+state.uploadedReceiptBase64 = null;
+
+function calcClientModeAmounts(isInputTriggered) {
+  const isCopVes = state.activeClientDir === "cop_ves";
+  const inEl = $("clientInAmount");
+  const outEl = $("clientOutAmount");
+  if (!inEl || !outEl) return;
+
+  const usdtCopBuy = parseNum($("usdtCopBuy")?.value) || 0;
+  const usdtVesSell = parseNum($("usdtVesSell")?.value) || 0;
+  
+  if (isCopVes) {
+    const feeType = $("feeType")?.value || "pct";
+    const feePct = parseNum($("feePct")?.value) / 100 || 0;
+    const feeFixed = parseNum($("feeFixed")?.value) || 0;
+    
+    const usdViaEur = usdVesViaEur();
+    const rateVesPerUsdt = (usdViaEur && usdViaEur > 0) ? usdViaEur : usdtVesSell;
+    
+    if (isInputTriggered) {
+      const cop = parseNum(inEl.value);
+      if (!cop || !usdtCopBuy || !rateVesPerUsdt) {
+        outEl.value = "";
+        $("clientRateVal").textContent = "—";
+        return;
+      }
+      const baseUsdt = cop / usdtCopBuy;
+      const feeUsdt = feeType === "pct" ? (baseUsdt * feePct) : feeFixed;
+      const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+      const vesUsed = netUsdt * rateVesPerUsdt;
+      outEl.value = Number.isFinite(vesUsed) ? vesUsed.toFixed(2) : "";
+      
+      const effectiveRate = vesUsed > 0 ? (cop / vesUsed) : 0;
+      $("clientRateVal").textContent = effectiveRate > 0 ? `1 VES = ${effectiveRate.toFixed(2)} COP` : "—";
+    } else {
+      const targetVes = parseNum(outEl.value);
+      if (!targetVes || !rateVesPerUsdt || !usdtCopBuy) {
+        inEl.value = "";
+        $("clientRateVal").textContent = "—";
+        return;
+      }
+      const res = inverseCopForTargetVes(targetVes, rateVesPerUsdt, usdtCopBuy, feeType, feePct, feeFixed);
+      if (res && res.cop) {
+        inEl.value = res.cop.toFixed(0);
+        const effectiveRate = targetVes > 0 ? (res.cop / targetVes) : 0;
+        $("clientRateVal").textContent = effectiveRate > 0 ? `1 VES = ${effectiveRate.toFixed(2)} COP` : "—";
+      } else {
+        inEl.value = "";
+      }
+    }
+  } else {
+    const isUsd = state.vesCurrency === "usd";
+    const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value) || 0;
+    const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value) || 0;
+    const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || 0;
+    
+    const vesFeeType = $("vesFeeType")?.value || "pct";
+    const vesFeePct = parseNum($("vesFeePct")?.value) / 100 || 0;
+    const vesFeeFixed = parseNum($("vesFeeFixed")?.value) || 0;
+    
+    let rateVesPerUsd = null;
+    if (isUsd) {
+      rateVesPerUsd = 1.0;
+    } else {
+      const rateType = $("vesUsdRateType")?.value || "usdtVesBuy";
+      if (rateType === "usdtVesBuy") {
+        rateVesPerUsd = parseNum($("usdtVesBuy")?.value) || 0;
+      } else if (rateType === "usdtVesSell") {
+        rateVesPerUsd = parseNum($("usdtVesSell")?.value) || 0;
+      } else if (rateType === "usdVesPar") {
+        rateVesPerUsd = parseNum($("usdVesPar")?.value) || 0;
+      } else if (rateType === "usdVesOf") {
+        rateVesPerUsd = parseNum($("usdVesOf")?.value) || 0;
+      } else if (rateType === "eurVes") {
+        const eurVes = parseNum($("eurVes")?.value) || 0;
+        const eurUsd = parseNum($("eurUsd")?.value) || 0;
+        rateVesPerUsd = (eurVes > 0 && eurUsd > 0) ? (eurVes / eurUsd) : 0;
+      }
+    }
+    
+    if (isInputTriggered) {
+      const v = parseNum(inEl.value);
+      if (!v || !rateVesPerUsd || !vesUsdtCopBuy) {
+        outEl.value = "";
+        $("clientRateVal").textContent = "—";
+        return;
+      }
+      const baseUsdt = isUsd ? v : (v / rateVesPerUsd);
+      const feeUsdt = vesFeeType === "pct" ? (baseUsdt * vesFeePct) : vesFeeFixed;
+      const netUsdt = Math.max(baseUsdt - feeUsdt, 0);
+      const copReceived = netUsdt * vesUsdtCopBuy;
+      outEl.value = Number.isFinite(copReceived) ? copReceived.toFixed(0) : "";
+      
+      const effectiveRate = v > 0 ? (copReceived / v) : 0;
+      $("clientRateVal").textContent = effectiveRate > 0 ? `1 ${isUsd ? 'USD' : 'VES'} = ${effectiveRate.toFixed(2)} COP` : "—";
+    } else {
+      const targetCop = parseNum(outEl.value);
+      if (!targetCop || !vesUsdtCopBuy || !rateVesPerUsd) {
+        inEl.value = "";
+        $("clientRateVal").textContent = "—";
+        return;
+      }
+      
+      const netUsdtRequired = targetCop / vesUsdtCopBuy;
+      let baseUsdtRequired = null;
+      if (vesFeeType === "pct") {
+        const k = 1 - vesFeePct;
+        baseUsdtRequired = k > 0 ? (netUsdtRequired / k) : null;
+      } else {
+        baseUsdtRequired = netUsdtRequired + vesFeeFixed;
+      }
+      
+      if (baseUsdtRequired && baseUsdtRequired > 0) {
+        const vesRequired = isUsd ? baseUsdtRequired : (baseUsdtRequired * rateVesPerUsd);
+        inEl.value = vesRequired.toFixed(2);
+        const effectiveRate = vesRequired > 0 ? (targetCop / vesRequired) : 0;
+        $("clientRateVal").textContent = effectiveRate > 0 ? `1 ${isUsd ? 'USD' : 'VES'} = ${effectiveRate.toFixed(2)} COP` : "—";
+      } else {
+        inEl.value = "";
+      }
+    }
+  }
+}
+
+function updateClientModeUI() {
+  const brand = getBranding();
+  
+  // Set branding title
+  const brandNameText = brand.brand_name || "CAZEEXCHANGE";
+  setText("clientBrandName", brandNameText);
+
+  // Configure views based on step
+  const steps = ["Calculator", "Checkout", "Success"];
+  steps.forEach(s => {
+    const el = $("clientStep" + s);
+    if (el) {
+      if (state.clientStep === s.toLowerCase()) {
+        el.classList.remove("hidden");
+      } else {
+        el.classList.add("hidden");
+      }
+    }
+  });
+
+  // Calculate & Refresh amounts
+  calcClientModeAmounts(true);
+
+  // Hydrate Bank dropdowns and Labels depending on Direction
+  const isCopVes = state.activeClientDir === "cop_ves";
+  const inBadge = $("clientInCurrencyBadge");
+  const outBadge = $("clientOutCurrencyBadge");
+  const sendLbl = $("lblClientSend");
+  const receiveLbl = $("lblClientReceive");
+
+  if (isCopVes) {
+    if (inBadge) inBadge.textContent = "COP";
+    if (outBadge) outBadge.textContent = "VES";
+    if (sendLbl) sendLbl.textContent = "Tú envías (Pesos Colombianos)";
+    if (receiveLbl) receiveLbl.textContent = "Tu beneficiario recibe (Bolívares Digitales)";
+  } else {
+    const isUsd = state.vesCurrency === "usd";
+    if (inBadge) inBadge.textContent = isUsd ? "USD" : "VES";
+    if (outBadge) outBadge.textContent = "COP";
+    if (sendLbl) sendLbl.textContent = isUsd ? "Tú envías (Dólares USD)" : "Tú envías (Bolívares Digitales)";
+    if (receiveLbl) receiveLbl.textContent = "Tu beneficiario recibe (Pesos Colombianos)";
+  }
+}
+
+function handleReceiptUpload(file) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    alert("Por favor, sube solo archivos de imagen (PNG, JPG, JPEG).");
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.uploadedReceiptBase64 = e.target.result;
+    const previewEl = $("receiptFilePreview");
+    if (previewEl) {
+      previewEl.innerHTML = `
+        <div style="display:inline-block; position:relative; margin-top:10px;">
+          <img src="${state.uploadedReceiptBase64}" style="max-width:140px; max-height:100px; border-radius:8px; border:1px solid var(--border);" />
+          <button id="btnRemoveReceipt" class="btn xs" style="position:absolute; top:-5px; right:-5px; border-radius:50%; width:20px; height:20px; padding:0; line-height:1; background:var(--bad); color:#fff; border:none; cursor:pointer;" type="button">&times;</button>
+        </div>
+      `;
+      $("btnRemoveReceipt")?.addEventListener("click", () => {
+        state.uploadedReceiptBase64 = null;
+        previewEl.innerHTML = "";
+      });
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function wireClientModeEvents() {
+  // Toggle buttons
+  $("btnToggleClientMode")?.addEventListener("click", () => {
+    $("operatorView")?.classList.add("hidden");
+    $("clientView")?.classList.remove("hidden");
+    state.clientMode = true;
+    state.clientStep = "calculator";
+    updateClientModeUI();
+  });
+
+  $("btnExitClientMode")?.addEventListener("click", () => {
+    $("clientView")?.classList.add("hidden");
+    $("operatorView")?.classList.remove("remove-glass"); // just remove class safely
+    $("operatorView")?.classList.remove("hidden");
+    state.clientMode = false;
+  });
+
+  // Lightbox Close
+  $("btnLightboxClose")?.addEventListener("click", () => {
+    const modal = $("imageLightboxModal");
+    if (modal) {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    }
+  });
+
+  // Directions
+  $("btnClientDirCopVes")?.addEventListener("click", () => {
+    $("btnClientDirCopVes")?.classList.add("active");
+    $("btnClientDirVesCop")?.classList.remove("active");
+    state.activeClientDir = "cop_ves";
+    updateClientModeUI();
+  });
+
+  $("btnClientDirVesCop")?.addEventListener("click", () => {
+    $("btnClientDirVesCop")?.classList.add("active");
+    $("btnClientDirCopVes")?.classList.remove("active");
+    state.activeClientDir = "ves_cop";
+    updateClientModeUI();
+  });
+
+  // Live input changes
+  $("clientInAmount")?.addEventListener("input", () => calcClientModeAmounts(true));
+  $("clientOutAmount")?.addEventListener("input", () => calcClientModeAmounts(false));
+
+  // Step 1 ➔ Step 2 (Next)
+  $("btnClientNext")?.addEventListener("click", () => {
+    const inVal = parseNum($("clientInAmount")?.value);
+    const outVal = parseNum($("clientOutAmount")?.value);
+    if (!inVal || inVal <= 0 || !outVal || outVal <= 0) {
+      alert("Por favor, ingresa un monto válido antes de continuar.");
+      return;
+    }
+
+    // Go to step 2
+    state.clientStep = "checkout";
+    updateClientModeUI();
+
+    // Hydrate checkout summary
+    const isCopVes = state.activeClientDir === "cop_ves";
+    const isUsd = state.vesCurrency === "usd";
+    const inCur = isCopVes ? "COP" : (isUsd ? "USD" : "VES");
+    const outCur = isCopVes ? "VES" : "COP";
+    setText("clientCheckoutSummaryText", `${fmt(inVal, isCopVes ? 0 : 2)} ${inCur} ➔ ${fmt(outVal, isCopVes ? 2 : 0)} ${outCur}`);
+
+    // Populate receiver details instructions depending on direction
+    const brand = getBranding();
+    const accountsEl = $("clientReceiverAccounts");
+    if (accountsEl) {
+      if (isCopVes) {
+        // We receive COP
+        accountsEl.innerHTML = brand.receive_cop 
+          ? escapeHtml(brand.receive_cop).replace(/\n/g, "<br/>") 
+          : "<strong>Bancolombia Ahorros Nro 123-456789-01</strong><br/>Titular: CazeExchange SAS";
+      } else {
+        // We receive VES
+        accountsEl.innerHTML = brand.receive_ves 
+          ? escapeHtml(brand.receive_ves).replace(/\n/g, "<br/>") 
+          : "<strong>Pago Móvil Banesco (0412-1234567)</strong><br/>Cédula: V-12345678";
+      }
+    }
+
+    // Populate recipient banks dynamically based on receiving side
+    const selectBank = $("checkoutBeneBank");
+    if (selectBank) {
+      selectBank.innerHTML = "";
+      const activeBanks = isCopVes ? VENEZUELAN_BANKS : COLOMBIAN_BANKS;
+      activeBanks.forEach(b => {
+        const opt = document.createElement("option");
+        opt.value = b;
+        opt.textContent = b;
+        selectBank.appendChild(opt);
+      });
+    }
+
+    // Adapt document labels if receiving in COP
+    const beneDocLabel = $("lblCheckoutBeneDoc");
+    const docTypeSelect = $("checkoutBeneDocType");
+    const accountLabel = $("lblCheckoutBeneAccount");
+    const accountHint = $("checkoutBeneAccountHint");
+
+    if (isCopVes) {
+      // Destination Venezuela: standard Cedula and Account/Pago Movil details
+      if (beneDocLabel) beneDocLabel.textContent = "Documento Beneficiario (Cédula / RIF)";
+      if (docTypeSelect) docTypeSelect.style.display = "inline-block";
+      if (accountLabel) accountLabel.textContent = "Número de Celular (Pago Móvil) o Cuenta Bancaria (20 dígitos)";
+      if (accountHint) accountHint.textContent = "Pago Móvil: Solo Nro de Celular. Transferencia: Cuenta Completa de 20 dígitos.";
+    } else {
+      // Destination Colombia: standard CC/NIT/Nequi/Daviplata details
+      if (beneDocLabel) beneDocLabel.textContent = "Tipo y Nro Documento Beneficiario (CC / NIT / CE)";
+      if (docTypeSelect) docTypeSelect.style.display = "none"; // free text document is simpler for Colombian bank CC input
+      if (accountLabel) accountLabel.textContent = "Número de Cuenta o Celular (Nequi / Daviplata)";
+      if (accountHint) accountHint.textContent = "Escribe el número de celular o número de cuenta de ahorros/corriente.";
+    }
+  });
+
+  // Step 2 ➔ Step 1 (Back)
+  $("btnClientBackToCalc")?.addEventListener("click", () => {
+    state.clientStep = "calculator";
+    updateClientModeUI();
+  });
+
+  // File Input and Drag-and-Drop Dropzone Setup
+  const dropzone = $("receiptDropzone");
+  const fileInput = $("receiptFileInput");
+
+  if (dropzone && fileInput) {
+    dropzone.addEventListener("click", () => fileInput.click());
+    
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleReceiptUpload(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleReceiptUpload(e.target.files[0]);
+      }
+    });
+  }
+
+  // Registering transaction from client view (Submit Step 2)
+  $("btnClientSubmit")?.addEventListener("click", () => {
+    const senderName = $("checkoutSenderName")?.value.trim();
+    const senderPhone = $("checkoutSenderPhone")?.value.trim();
+    const beneBank = $("checkoutBeneBank")?.value;
+    const beneType = $("checkoutBeneType")?.value;
+    const beneDocType = $("checkoutBeneDocType")?.value;
+    const beneDoc = $("checkoutBeneDoc")?.value.trim();
+    const beneAccount = $("checkoutBeneAccount")?.value.trim();
+    const beneName = $("checkoutBeneName")?.value.trim();
+
+    if (!senderName || !senderPhone || !beneName || !beneAccount) {
+      alert("Por favor, completa los campos obligatorios del beneficiario y remitente.");
+      return;
+    }
+
+    if (state.activeClientDir === "cop_ves" && beneAccount.length !== 10 && beneAccount.length !== 20) {
+      // Validation for Venezuela accounts
+      if (beneType === "pago_movil" && beneAccount.length !== 10) {
+        alert("Para Pago Móvil en Venezuela, el número de celular debe ser de 10 dígitos (ej: 4121234567).");
+        return;
+      }
+      if (beneType === "transferencia" && beneAccount.length !== 20) {
+        alert("Para Transferencia Bancaria en Venezuela, la cuenta de banco debe constar de 20 dígitos.");
+        return;
+      }
+    }
+
+    // Read details from calculator
+    const inVal = parseNum($("clientInAmount")?.value);
+    const outVal = parseNum($("clientOutAmount")?.value);
+    const isCopVes = state.activeClientDir === "cop_ves";
+    const isUsd = state.vesCurrency === "usd";
+    const inCur = isCopVes ? "COP" : (isUsd ? "USD" : "VES");
+    const outCur = isCopVes ? "VES" : "COP";
+
+    // Generate simulated profit & rates
+    let profit = 0;
+    let ratesAppliedStr = "";
+    if (isCopVes) {
+      const main = calcMain({ paint: false });
+      profit = main ? main.feeUsdt : 0;
+      ratesAppliedStr = `USDT/COP: ${parseNum($("usdtCopBuy")?.value)} | USDT/VES: ${parseNum($("usdtVesSell")?.value)}`;
+    } else {
+      const defaultUsdtCopSell = parseNum($("usdtCopSell")?.value) || 0;
+      const customVesUsdtCopBuy = parseNum($("vesUsdtCopBuy")?.value) || 0;
+      const vesUsdtCopBuy = customVesUsdtCopBuy || defaultUsdtCopSell || 0;
+      
+      let rateVesPerUsd = 1.0;
+      if (!isUsd) {
+        const rateType = $("vesUsdRateType")?.value || "usdtVesBuy";
+        rateVesPerUsd = parseNum($(rateType)?.value) || parseNum($("usdtVesBuy")?.value) || 0;
+      }
+      const baseUsdt = isUsd ? inVal : (inVal / rateVesPerUsd);
+      const vesFeeType = $("vesFeeType")?.value || "pct";
+      const vesFeePct = parseNum($("vesFeePct")?.value) / 100 || 0;
+      const vesFeeFixed = parseNum($("vesFeeFixed")?.value) || 0;
+      profit = vesFeeType === "pct" ? (baseUsdt * vesFeePct) : vesFeeFixed;
+      ratesAppliedStr = `USDT/COP: ${vesUsdtCopBuy} | USDT/VES: ${rateVesPerUsd}`;
+    }
+
+    // Build the beautiful complete record object
+    const ticketId = "REG-" + Math.floor(100000 + Math.random() * 900000);
+    const entry = {
+      id: ticketId,
+      timestamp: new Date().toISOString(),
+      direction: state.activeClientDir,
+      directionLabel: isCopVes ? "COP ➔ VES" : (isUsd ? "USD ➔ COP" : "VES ➔ COP"),
+      inputAmount: inVal,
+      inputCurrency: inCur,
+      outputAmount: outVal,
+      outputCurrency: outCur,
+      profit: profit,
+      profitCurrency: "USDT",
+      status: "pendiente", // ALWAYS PENDING FOR MODERATION
+      rates: ratesAppliedStr,
+      
+      // Extended Client details
+      senderName,
+      senderPhone,
+      beneficiaryBank: beneBank,
+      beneficiaryType: beneType,
+      beneficiaryDocType: isCopVes ? beneDocType : "CC",
+      beneficiaryDoc,
+      beneficiaryAccount: beneAccount,
+      beneficiaryName: beneName,
+      receiptImage: state.uploadedReceiptBase64
+    };
+
+    // Store in local storage & sync to server!
+    addMyRecordEntry(entry);
+    renderMyRecordsUI();
+
+    // Fill Step 3: Success tickets
+    setText("successTicketId", entry.id);
+    setText("successSender", entry.senderName);
+    setText("successPhone", entry.senderPhone);
+    setText("successSendAmount", `${fmt(entry.inputAmount, isCopVes ? 0 : 2)} ${entry.inputCurrency}`);
+    setText("successReceiveAmount", `${fmt(entry.outputAmount, isCopVes ? 2 : 0)} ${entry.outputCurrency}`);
+    setText("successBeneName", entry.beneficiaryName);
+    setText("successBeneBank", entry.beneficiaryBank);
+    setText("successBeneAccount", entry.beneficiaryAccount);
+    setText("successBeneDoc", isCopVes ? `${entry.beneficiaryDocType}-${entry.beneficiaryDoc}` : entry.beneficiaryDoc);
+    setText("successTicketDate", `Fecha: ${new Date(entry.timestamp).toLocaleString("es-ES")}`);
+
+    // Go to Success
+    state.clientStep = "success";
+    updateClientModeUI();
+  });
+
+  // Share via WhatsApp
+  $("btnClientWhatsappShare")?.addEventListener("click", () => {
+    const isCopVes = state.activeClientDir === "cop_ves";
+    const isUsd = state.vesCurrency === "usd";
+    const inCur = isCopVes ? "COP" : (isUsd ? "USD" : "VES");
+    const outCur = isCopVes ? "VES" : "COP";
+
+    const ticketId = $("successTicketId")?.textContent || "";
+    const sender = $("successSender")?.textContent || "";
+    const phone = $("successPhone")?.textContent || "";
+    const sendAmt = $("successSendAmount")?.textContent || "";
+    const recAmt = $("successReceiveAmount")?.textContent || "";
+    const bene = $("successBeneName")?.textContent || "";
+    const bank = $("successBeneBank")?.textContent || "";
+    const acc = $("successBeneAccount")?.textContent || "";
+    const doc = $("successBeneDoc")?.textContent || "";
+
+    const brand = getBranding();
+    const brandName = brand.brand_name || "CAZEEXCHANGE";
+
+    // Format professional structured WhatsApp message
+    const msg = `🔔 *NUEVA SOLICITUD DE REMESA - ${brandName}* 🔔\n` +
+                `----------------------------------------\n` +
+                `*ID de Operación:* \`${ticketId}\`\n` +
+                `*Estado:* 🟠 Pendiente por Aprobación\n\n` +
+                `👤 *Remitente:* ${sender}\n` +
+                `📞 *Teléfono:* ${phone}\n\n` +
+                `💸 *Monto Transferido:* ${sendAmt}\n` +
+                `📥 *Monto a Recibir:* ${recAmt}\n\n` +
+                `🏦 *Detalles Destinatario:*\n` +
+                `• *Nombre:* ${bene}\n` +
+                `• *Documento:* ${doc}\n` +
+                `• *Banco:* ${bank}\n` +
+                `• *Nro Cuenta/Celular:* ${acc}\n` +
+                `----------------------------------------\n` +
+                `📱 _He cargado mi comprobante de pago en el sistema. Quedo atento a la confirmación de la transferencia._`;
+
+    const encodedText = encodeURIComponent(msg);
+    window.open(`https://api.whatsapp.com/send?text=${encodedText}`, "_blank");
+  });
+
+  // Reset & New quote
+  $("btnClientNewQuote")?.addEventListener("click", () => {
+    // Clear calculator inputs
+    const inEl = $("clientInAmount");
+    const outEl = $("clientOutAmount");
+    if (inEl) inEl.value = "";
+    if (outEl) outEl.value = "";
+    
+    // Clear receipt
+    state.uploadedReceiptBase64 = null;
+    const previewEl = $("receiptFilePreview");
+    if (previewEl) previewEl.innerHTML = "";
+    
+    // Go to Step 1
+    state.clientStep = "calculator";
+    updateClientModeUI();
+  });
 }
 
 // Bootstrap Auth + Professional Setup
@@ -4132,4 +5050,8 @@ bootstrapAuth().finally(() => {
   // Setup My Records UI
   wireMyRecordsTabEvents();
   renderMyRecordsUI();
+
+  // Setup A1 & A2 Client Mode
+  wireClientModeEvents();
 });
+
