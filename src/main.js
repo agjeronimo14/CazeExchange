@@ -1,4 +1,6 @@
 import "./style.css";
+import "./app-mobile.css";
+import { mountLanding } from "./landing.js";
 
 /* =========================
    CazeExchange (v1)
@@ -814,6 +816,33 @@ No encuentro #app. Revisa index.html y deja: <div id="app"></div>
   throw new Error("No se encontró #app");
 }
 
+const landingMount = document.getElementById("landing");
+
+function isAppRoute() {
+  return window.location.hash === "#app";
+}
+
+function syncShellRoute() {
+  const showApp = isAppRoute();
+  landingMount?.classList.toggle("hidden", showApp);
+  mount.classList.toggle("hidden", !showApp);
+  document.body.classList.toggle("marketing-route", !showApp);
+  document.title = showApp
+    ? "CazeExchange | Cotizador"
+    : "CazeExchange | Cotizaciones COP ↔ VES para operadores";
+}
+
+function goToApp({ login = false } = {}) {
+  if (!isAppRoute()) window.location.hash = "app";
+  syncShellRoute();
+  if (login) setTimeout(() => openAuthModal(), 0);
+}
+
+mountLanding(landingMount);
+window.addEventListener("hashchange", syncShellRoute);
+window.addEventListener("caze:open-app", (event) => goToApp(event.detail || {}));
+syncShellRoute();
+
 mount.innerHTML = `
   <div id="operatorView">
     <div class="container">
@@ -1254,7 +1283,7 @@ mount.innerHTML = `
           <h2 style="margin:0">Usuarios</h2>
           <div class="hint" style="margin:6px 0 10px">Tip: para resetear, usa el botón en la fila.</div>
           <div style="overflow:auto">
-            <table class="table">
+            <table class="table adminUsersTable">
               <thead>
                 <tr>
                   <th style="width:50px;">ID</th>
@@ -1911,6 +1940,8 @@ $("btnLogin")?.addEventListener("click", async () => {
     const me = await apiFetch("/api/me", { method: "GET" });
     state.user = me.user;
     state.demo = false;
+    // Los clientes con sesión activa entran directo al cotizador.
+    goToApp();
     applyServerSettingsToState(me.settings);
 
     // Limpiar caché local para evitar fugas entre cuentas de usuario
@@ -2002,6 +2033,7 @@ async function bootstrapAuth() {
     const me = await apiFetch("/api/me", { method: "GET" });
     state.user = me.user;
     state.demo = false;
+    goToApp();
     applyServerSettingsToState(me.settings);
 
     // branding del usuario (server)
@@ -3262,6 +3294,7 @@ async function loadAdminUsers() {
         <td>${statusBadgeHtml}</td>
         <td>
           <div style="display:flex; flex-direction:column; gap:4px; max-width:110px;">
+            <button class="btn xs primary" data-action="renew" data-id="${u.id}" style="padding: 4px 8px; font-size:11px;">Renovar +30d</button>
             <button class="btn xs" data-action="reset" data-id="${u.id}" style="padding: 4px 8px; font-size:11px;">Reset clave</button>
             <button class="btn xs" data-action="toggle" data-id="${u.id}" data-active="${active ? "1":"0"}" style="padding: 4px 8px; font-size:11px;">
               ${active ? "Desactivar" : "Activar"}
@@ -3279,6 +3312,20 @@ async function loadAdminUsers() {
       const id = Number(b.dataset.id);
       const action = b.dataset.action;
       if (!id) return;
+      if (action === "renew") {
+        try {
+          const r = await apiFetch("/api/admin/renew-user", {
+            method: "POST",
+            body: JSON.stringify({ user_id: id, days: 30 }),
+          });
+          const date = r?.user?.expires_at ? r.user.expires_at.slice(0, 10) : "actualizada";
+          $("adminResult").textContent = `Plan renovado 30 días. Nueva expiración: ${date}.`;
+          await loadAdminUsers();
+        } catch (e) {
+          $("adminResult").textContent = `Error al renovar: ${e.message || e}`;
+        }
+        return;
+      }
       if (action === "reset") {
         if (!confirm(`Resetear contraseña del usuario ${id}?`)) return;
         try {
@@ -5054,4 +5101,3 @@ bootstrapAuth().finally(() => {
   // Setup A1 & A2 Client Mode
   wireClientModeEvents();
 });
-

@@ -64,6 +64,7 @@ export async function onRequest(context) {
   } catch (e) {
     const msg = String(e?.message || e);
     if (msg.toLowerCase().includes("unique")) return err(409, "Email already exists");
-    return err(500, "DB error", { detail: msg });
+    console.error("CREATE_USER_FAILED", msg);
+    return err(500, "No se pudo crear el usuario");
   }
 }

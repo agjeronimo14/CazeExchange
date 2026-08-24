@@ -47,10 +47,15 @@ function getProvidedToken(request) {
   if (h1) return h1;
   const auth = request.headers.get("authorization");
   if (auth && auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
-  const url = new URL(request.url);
-  const q = url.searchParams.get("token");
-  if (q) return q;
   return null;
+}
+
+async function tokenMatches(provided, expected) {
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", te.encode(provided)),
+    crypto.subtle.digest("SHA-256", te.encode(expected)),
+  ]);
+  return crypto.subtle.timingSafeEqual(providedHash, expectedHash);
 }
 
 export async function onRequestPost({ request, env }) {
@@ -59,7 +64,9 @@ export async function onRequestPost({ request, env }) {
     if (!expected) return json({ error: "Missing BOOTSTRAP_TOKEN (redeploy required)" }, 500);
 
     const provided = getProvidedToken(request);
-    if (!provided || provided !== expected) return json({ error: "Invalid bootstrap token" }, 401);
+    if (!provided || !(await tokenMatches(provided, expected))) {
+      return json({ error: "Invalid bootstrap token" }, 401);
+    }
 
     let body;
     try { body = await request.json(); } catch { return json({ error: "Expected JSON" }, 400); }
@@ -86,6 +93,6 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true, user: { id: userId, email, role: "admin", plan: "pro" } }, 200);
   } catch (e) {
     console.error("BOOTSTRAP_CRASH:", e);
-    return json({ error: "Bootstrap crashed", message: String(e?.message || e), stack: String(e?.stack || "") }, 500);
+    return json({ error: "No se pudo completar la configuraciÃ³n inicial" }, 500);
   }
 }

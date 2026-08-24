@@ -8,7 +8,8 @@ function json(data, status = 200, extraHeaders = {}) {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "cache-control": "public, max-age=60",
+      // Una cotizaciÃ³n no debe reaparecer desde la cachÃ© del navegador.
+      "cache-control": "no-store, max-age=0",
       "access-control-allow-origin": "*",
       ...extraHeaders,
     },
@@ -38,22 +39,29 @@ function median(values) {
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 }
 
-async function fetchJson(url, init) {
-  const res = await fetch(url, init);
-  const txt = await res.text();
-  let data = null;
+async function fetchJson(url, init = {}) {
+  // Un proveedor lento no debe bloquear la cotizaciÃ³n completa.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
   try {
-    data = txt ? JSON.parse(txt) : null;
-  } catch {
-    data = null;
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const txt = await res.text();
+    let data = null;
+    try {
+      data = txt ? JSON.parse(txt) : null;
+    } catch {
+      data = null;
+    }
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status} ${url}`);
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!res.ok) {
-    const err = new Error(`HTTP ${res.status} ${url}`);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-  return data;
 }
 
 async function binanceP2P({ fiat, tradeType, transAmount }) {

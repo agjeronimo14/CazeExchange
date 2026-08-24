@@ -1,5 +1,6 @@
 import { pbkdf2Verify } from "../_lib/crypto.js";
 import { json, buildSetCookie, makeSessionId } from "../_lib/auth.js";
+import { isHttps } from "../_lib/http.js";
 
 export async function onRequestPost({ request, env }) {
   try {
@@ -43,7 +44,7 @@ export async function onRequestPost({ request, env }) {
 
     const setCookie = buildSetCookie("ce_session", sid, {
       httpOnly: true,
-      secure: true,
+      secure: isHttps(request),
       sameSite: "Lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 14,
@@ -56,10 +57,6 @@ export async function onRequestPost({ request, env }) {
     );
   } catch (e) {
     console.error("LOGIN_CRASH:", e);
-    return new Response(JSON.stringify({
-      error: "Login crashed",
-      message: String(e?.message || e),
-      stack: String(e?.stack || "")
-    }), { status: 500, headers: { "content-type": "application/json; charset=utf-8" } });
+    return json({ error: "No se pudo iniciar sesiÃ³n" }, 500);
   }
 }

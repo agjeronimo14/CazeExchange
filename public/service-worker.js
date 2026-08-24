@@ -1,4 +1,4 @@
-const CACHE_NAME = "cazeexchange-pwa-v1";
+const CACHE_NAME = "cazeexchange-pwa-v2";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html"
@@ -34,7 +34,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // Solo interceptar peticiones de navegación y assets estáticos locales
   const url = new URL(event.request.url);
-  if (event.request.mode === "navigate" || url.origin === self.location.origin) {
+  if (
+    event.request.method === "GET" &&
+    url.origin === self.location.origin &&
+    !url.pathname.startsWith("/api/")
+  ) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {

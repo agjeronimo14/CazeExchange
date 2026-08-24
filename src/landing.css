@@ -1,0 +1,265 @@
+.landing {
+  --landing-ink: #f2f6ff;
+  --landing-muted: #a8b5cd;
+  --landing-line: rgba(174, 202, 255, 0.16);
+  --landing-card: rgba(17, 30, 55, 0.72);
+  min-height: 100vh;
+  overflow: hidden;
+  color: var(--landing-ink);
+  background:
+    radial-gradient(800px 520px at 82% 0%, rgba(53, 135, 255, 0.18), transparent 68%),
+    radial-gradient(620px 460px at 0% 15%, rgba(28, 209, 138, 0.1), transparent 72%),
+    #081120;
+}
+
+.landingNav,
+.landingHero,
+.landingSection,
+.landingFlow,
+.landingRoadmap,
+.landingFooter {
+  width: min(1120px, calc(100% - 40px));
+  margin-inline: auto;
+}
+
+.landingNav {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.landingBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--landing-ink);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.landingBrand > span:last-child span { color: #53b8ff; }
+
+.landingMark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(111, 201, 255, 0.48);
+  border-radius: 11px;
+  color: #06223d;
+  background: linear-gradient(145deg, #72e6c0, #4a9dff);
+  box-shadow: 0 10px 28px rgba(46, 157, 255, 0.24);
+}
+
+.landingNavActions,
+.landingCtas { display: flex; align-items: center; gap: 12px; }
+
+.landingButton,
+.landingSecondaryButton,
+.landingTextButton {
+  font: inherit;
+  cursor: pointer;
+}
+
+.landingButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 19px;
+  border: 1px solid rgba(146, 227, 255, 0.35);
+  border-radius: 13px;
+  color: #03131f;
+  background: linear-gradient(135deg, #78e5be, #57a5ff);
+  box-shadow: 0 12px 30px rgba(55, 153, 255, 0.22);
+  font-weight: 800;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+
+.landingButton:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.landingButtonSmall { min-height: 38px; padding-inline: 14px; font-size: 13px; }
+
+.landingSecondaryButton,
+.landingTextButton {
+  border: 0;
+  color: #c7d7ef;
+  background: transparent;
+  font-weight: 700;
+}
+
+.landingSecondaryButton { min-height: 48px; padding: 0 13px; }
+.landingTextButton { padding: 8px 3px; font-size: 13px; }
+.landingTextButton:hover, .landingSecondaryButton:hover { color: white; }
+
+.landingHero {
+  min-height: 590px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(370px, 0.82fr);
+  align-items: center;
+  gap: clamp(38px, 7vw, 94px);
+  padding: 70px 0 92px;
+}
+
+.landingEyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 17px;
+  color: #7ec8ff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.095em;
+  text-transform: uppercase;
+}
+
+.landingEyebrow span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #57ddb0;
+  box-shadow: 0 0 0 5px rgba(87, 221, 176, 0.12);
+}
+
+.landingHero h1,
+.landingSection h2,
+.landingFlow h2,
+.landingRoadmap h2,
+.landingModalCard h2 {
+  margin: 0;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.landingHero h1 { max-width: 680px; font-size: clamp(46px, 5.6vw, 76px); }
+.landingHero h1 em { color: #70d9bd; font-style: normal; }
+
+.landingLead {
+  max-width: 580px;
+  margin: 25px 0 28px;
+  color: var(--landing-muted);
+  font-size: 18px;
+  line-height: 1.65;
+}
+
+.landingReassurance { margin: 19px 0 0; color: #7f90ae; font-size: 12px; }
+
+.landingPreview {
+  position: relative;
+  isolation: isolate;
+  padding: 20px;
+  border: 1px solid rgba(157, 199, 255, 0.22);
+  border-radius: 24px;
+  background: linear-gradient(150deg, rgba(23, 43, 77, 0.95), rgba(10, 20, 39, 0.98));
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.34);
+}
+
+.landingPreview::before {
+  position: absolute;
+  z-index: -1;
+  inset: 18% -14% -18% 20%;
+  border-radius: 50%;
+  background: rgba(42, 144, 255, 0.2);
+  filter: blur(55px);
+  content: "";
+}
+
+.landingPreviewTop,
+.landingPreviewRate,
+.landingPreviewAmounts { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.landingPreviewTop { padding-bottom: 19px; border-bottom: 1px solid var(--landing-line); }
+.landingPreviewBrand { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; }
+.landingLive { display: inline-flex; align-items: center; gap: 7px; color: #6be6b6; font-size: 11px; font-weight: 700; }
+.landingLive i { width: 7px; height: 7px; border-radius: 50%; background: #4ae09f; box-shadow: 0 0 0 4px rgba(74, 224, 159, 0.12); }
+
+.landingPreviewDirection { margin: 29px 0 20px; color: #9ec2ed; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; }
+.landingPreviewDirection span { margin: 0 8px; color: #75dbbc; }
+
+.landingPreviewAmounts { align-items: stretch; }
+.landingPreviewAmounts > div:not(.landingPreviewArrow) { flex: 1; min-width: 0; }
+.landingPreviewAmounts small { display: block; margin-bottom: 8px; color: #93a4c0; font-size: 11px; }
+.landingPreviewAmounts strong { display: block; font-size: clamp(19px, 2.2vw, 27px); letter-spacing: -0.045em; }
+.landingPreviewAmounts strong span { color: #8ba2c6; font-size: 12px; letter-spacing: 0; }
+.landingPreviewArrow { align-self: center; color: #71d8bd; font-size: 23px; }
+
+.landingPreviewRate { margin: 27px 0 16px; padding: 15px; border-radius: 13px; background: rgba(255, 255, 255, 0.045); color: #9eadc3; font-size: 12px; }
+.landingPreviewRate b { color: white; font-size: 12px; }
+.landingWhatsAppPreview { width: 100%; min-height: 46px; border: 0; border-radius: 12px; color: #d7fff0; background: rgba(61, 199, 132, 0.16); font: inherit; font-size: 13px; font-weight: 800; }
+.landingWhatsAppPreview span { margin-right: 5px; color: #6de2b0; }
+
+.landingSection { padding: 96px 0; border-top: 1px solid rgba(174, 202, 255, 0.1); }
+.landingSectionIntro { max-width: 650px; }
+.landingSection h2, .landingFlow h2, .landingRoadmap h2 { font-size: clamp(34px, 4vw, 54px); }
+
+.landingFeatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 44px; }
+.landingFeatures article { min-height: 240px; padding: 25px; border: 1px solid var(--landing-line); border-radius: 18px; background: var(--landing-card); }
+.landingFeatureIcon { display: inline-grid; width: 35px; height: 35px; place-items: center; border: 1px solid rgba(104, 215, 188, 0.35); border-radius: 10px; color: #77e4c2; background: rgba(81, 215, 178, 0.09); font-size: 11px; font-weight: 800; }
+.landingFeatures h3 { margin: 24px 0 9px; font-size: 18px; letter-spacing: -0.025em; }
+.landingFeatures p, .landingFlow p { margin: 0; color: var(--landing-muted); font-size: 14px; line-height: 1.6; }
+
+.landingFlow { display: grid; grid-template-columns: 0.78fr 1fr; gap: clamp(34px, 9vw, 126px); padding: 95px 0; }
+.landingFlow > div { align-self: start; }
+.landingFlow ol { display: grid; gap: 19px; margin: 0; padding: 0; list-style: none; }
+.landingFlow li { display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: start; padding: 18px 0 20px; border-bottom: 1px solid var(--landing-line); }
+.landingFlow li > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; color: #75dbbd; background: rgba(92, 215, 184, 0.1); font-size: 13px; font-weight: 800; }
+.landingFlow li b { display: block; margin-bottom: 5px; font-size: 17px; }
+
+.landingRoadmap { display: grid; grid-template-columns: 0.92fr 1fr; gap: 45px; padding: 42px; border: 1px solid rgba(124, 197, 255, 0.21); border-radius: 24px; background: linear-gradient(135deg, rgba(26, 63, 98, 0.48), rgba(20, 39, 70, 0.64)); }
+.landingRoadmapList { display: grid; align-content: center; gap: 11px; }
+.landingRoadmapList span { position: relative; padding-left: 22px; color: #c3d1e9; font-size: 14px; }
+.landingRoadmapList span::before { position: absolute; top: 0.4em; left: 0; width: 8px; height: 8px; border-radius: 50%; background: #6cdbbd; content: ""; }
+
+.landingFooter { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 34px 0 42px; color: #7890b4; font-size: 12px; }
+
+.landingModal { position: fixed; z-index: 10000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(3, 8, 18, 0.74); backdrop-filter: blur(8px); }
+.landingModalCard { position: relative; width: min(620px, 100%); max-height: min(720px, calc(100vh - 40px)); overflow: auto; padding: 28px; border: 1px solid rgba(147, 207, 255, 0.22); border-radius: 22px; background: #0d1a30; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+.landingModalCard h2 { margin-bottom: 10px; font-size: 37px; }
+.landingModalCard > p:not(.landingEyebrow) { margin: 0; color: var(--landing-muted); line-height: 1.55; }
+.landingModalClose { position: absolute; top: 15px; right: 17px; width: 34px; height: 34px; border: 1px solid var(--landing-line); border-radius: 50%; color: #c8d6e9; background: transparent; font-size: 22px; cursor: pointer; }
+.landingForm { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 24px; }
+.landingForm label { display: grid; gap: 7px; color: #c4d2e7; font-size: 13px; font-weight: 700; }
+.landingForm label small { color: #8da0bc; font-weight: 500; }
+.landingForm input, .landingForm textarea { min-height: 45px; border: 1px solid var(--landing-line); border-radius: 11px; color: white; background: rgba(255,255,255,0.05); font: inherit; padding: 10px 12px; }
+.landingForm textarea { min-height: 86px; resize: vertical; }
+.landingForm input:focus, .landingForm textarea:focus { outline: 3px solid rgba(95, 169, 255, 0.2); border-color: rgba(112, 211, 255, 0.65); }
+.landingFormFull { grid-column: 1 / -1; }
+.landingForm .landingButton { width: max-content; }
+.landingFormMessage { grid-column: 1 / -1; min-height: 1.3em; margin: 0; color: #7fe4c1; font-size: 13px; }
+.landingHoneypot { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+
+@media (max-width: 760px) {
+  .landingNav, .landingHero, .landingSection, .landingFlow, .landingRoadmap, .landingFooter { width: min(100% - 28px, 560px); }
+  .landingNav { min-height: 68px; }
+  .landingHero { min-height: auto; grid-template-columns: 1fr; gap: 42px; padding: 52px 0 72px; }
+  .landingHero h1 { font-size: clamp(42px, 13vw, 59px); }
+  .landingLead { margin: 19px 0 25px; font-size: 16px; }
+  .landingPreview { padding: 17px; border-radius: 20px; }
+  .landingSection { padding: 72px 0; }
+  .landingFeatures { grid-template-columns: 1fr; margin-top: 30px; }
+  .landingFeatures article { min-height: 0; padding: 21px; }
+  .landingFeatures h3 { margin-top: 17px; }
+  .landingFlow, .landingRoadmap { grid-template-columns: 1fr; gap: 31px; padding: 72px 0; }
+  .landingRoadmap { margin-bottom: 20px; padding: 27px 22px; border-radius: 19px; }
+  .landingFooter { padding-top: 18px; }
+  .landingModalCard { padding: 24px 19px; }
+}
+
+@media (max-width: 440px) {
+  .landingNavActions { gap: 8px; }
+  .landingNav .landingTextButton { display: none; }
+  .landingButtonSmall { min-height: 36px; font-size: 12px; }
+  .landingCtas { align-items: stretch; flex-direction: column; }
+  .landingCtas > * { width: 100%; }
+  .landingSecondaryButton { border: 1px solid var(--landing-line); border-radius: 13px; }
+  .landingPreviewAmounts { gap: 8px; }
+  .landingPreviewAmounts strong { font-size: 18px; }
+  .landingPreviewArrow { font-size: 18px; }
+  .landingFlow li { grid-template-columns: 38px 1fr; gap: 10px; }
+  .landingForm { grid-template-columns: 1fr; }
+  .landingFormFull, .landingFormMessage { grid-column: auto; }
+  .landingForm .landingButton { width: 100%; }
+}

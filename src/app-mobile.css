@@ -1,0 +1,87 @@
+@media (max-width: 720px) {
+  #app .container { padding: 12px 12px 124px; }
+
+  #app .header {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  #app .brand h1 { max-width: 250px; font-size: 17px; line-height: 1.25; }
+
+  #app .actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  #app .actions > * { min-width: 0; }
+  #app #liveBadge, #app #status, #app #btnToggleClientMode { grid-column: 1 / -1; }
+  #app #btnToggleClientMode, #app #btnUpdate, #app #btnLogout { min-height: 42px; margin: 0; }
+  #app #status { text-align: center; }
+
+  #app .card { padding: 15px; border-radius: 17px; }
+  /* Las tablas amplias conservan desplazamiento dentro de su contenedor,
+     sin ensanchar todo el documento en mÃ³vil. */
+  #app .grid > *,
+  #app .colStack,
+  #app .card,
+  #app .invTableWrap { min-width: 0; max-width: 100%; }
+
+  #app .card h2 { font-size: 18px; color: var(--text); }
+  #app .modeBar { padding: 13px; }
+  #app .modeBarTop { align-items: flex-start; gap: 10px; }
+  #app .modeHint { font-size: 14px; line-height: 1.45; }
+
+  #app .tabsBottom {
+    justify-content: flex-start;
+    overflow-x: auto;
+    width: calc(100% - 20px);
+    gap: 7px;
+    padding: 8px;
+    scrollbar-width: none;
+  }
+
+  #app .tabsBottom::-webkit-scrollbar { display: none; }
+  #app .tabsBottom .tabBtn { flex: 0 0 auto; min-width: 84px; min-height: 40px; padding: 8px 10px; font-size: 11px; }
+
+  #app .adminUsersTable,
+  #app .adminUsersTable tbody,
+  #app .adminUsersTable tr,
+  #app .adminUsersTable td { display: block; width: 100%; }
+
+  #app .adminUsersTable thead { display: none; }
+  #app .adminUsersTable tbody { display: grid; gap: 10px; }
+  #app .adminUsersTable tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 15px;
+    background: rgba(255,255,255,.025);
+  }
+
+  #app .adminUsersTable td { min-width: 0; padding: 0; border: 0; }
+  #app .adminUsersTable td:nth-child(1) { display: none; }
+  #app .adminUsersTable td:nth-child(2),
+  #app .adminUsersTable td:nth-child(6) { grid-column: 1 / -1; }
+  #app .adminUsersTable td:nth-child(3)::before,
+  #app .adminUsersTable td:nth-child(4)::before,
+  #app .adminUsersTable td:nth-child(5)::before {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  #app .adminUsersTable td:nth-child(3)::before { content: "Expiración"; }
+  #app .adminUsersTable td:nth-child(4)::before { content: "Actividad"; }
+  #app .adminUsersTable td:nth-child(5)::before { content: "Estado"; }
+  #app .adminUsersTable td:nth-child(6) > div { flex-direction: row !important; flex-wrap: wrap; max-width: none !important; }
+  #app .adminUsersTable .btn { min-height: 34px; margin: 0; }
+}
