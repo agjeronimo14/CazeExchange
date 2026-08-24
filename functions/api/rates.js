@@ -64,12 +64,26 @@ async function fetchJson(url, init = {}) {
   }
 }
 
-async function binanceP2P({ fiat, tradeType, transAmount }) {
+const P2P_MARKETS = {
+  cop: {
+    payTypes: ["BancolombiaSA"],
+    label: "Bancolombia",
+    minCop: 50_000,
+    maxCop: 1_000_000,
+  },
+  ves: {
+    payTypes: ["BancoDeVenezuela"],
+    label: "Banco de Venezuela / Pago MÃ³vil",
+  },
+};
+
+async function binanceP2P({ fiat, tradeType, transAmount, payTypes = [] }) {
   const url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search";
   const payload = {
     page: 1,
     rows: 10,
     publisherType: null,
+    payTypes,
     asset: "USDT",
     fiat,
     tradeType,
@@ -138,6 +152,13 @@ export async function onRequest(context) {
     warnings: [],
   };
 
+  if (
+    Number.isFinite(copAmount) &&
+    (copAmount < P2P_MARKETS.cop.minCop || copAmount > P2P_MARKETS.cop.maxCop)
+  ) {
+    out.warnings.push("Monto COP fuera del rango operativo configurado (50.000 a 1.000.000 COP)");
+  }
+
   // Track fallbacks
   let usedApproxUsdtCop = false;
   let usedApproxUsdtVes = false;
@@ -146,16 +167,30 @@ export async function onRequest(context) {
 
   // 1) Binance P2P (USDT/COP y USDT/VES)
   try {
-    out.usdtCopBuy = await binanceP2P({ fiat: "COP", tradeType: "BUY", transAmount: copAmount });
-    if (Number.isFinite(out.usdtCopBuy)) out.sources.push("Binance P2P USDT/COP (BUY)");
+    out.usdtCopBuy = await binanceP2P({
+      fiat: "COP",
+      tradeType: "BUY",
+      transAmount: copAmount,
+      payTypes: P2P_MARKETS.cop.payTypes,
+    });
+    if (Number.isFinite(out.usdtCopBuy)) {
+      out.sources.push("Binance P2P USDT/COP (BUY, Bancolombia)");
+    }
   } catch (e) {
     binanceCopErr = e;
     out.warnings.push(`Binance P2P COP falló: ${String(e?.message ?? e)}`);
   }
 
   try {
-    out.usdtVesSell = await binanceP2P({ fiat: "VES", tradeType: "SELL", transAmount: vesAmount });
-    if (Number.isFinite(out.usdtVesSell)) out.sources.push("Binance P2P USDT/VES (SELL)");
+    out.usdtVesSell = await binanceP2P({
+      fiat: "VES",
+      tradeType: "SELL",
+      transAmount: vesAmount,
+      payTypes: P2P_MARKETS.ves.payTypes,
+    });
+    if (Number.isFinite(out.usdtVesSell)) {
+      out.sources.push("Binance P2P USDT/VES (SELL, Banco de Venezuela)");
+    }
   } catch (e) {
     binanceVesErr = e;
     out.warnings.push(`Binance P2P VES falló: ${String(e?.message ?? e)}`);
@@ -236,12 +271,27 @@ export async function onRequest(context) {
       : "—",
   };
 
+  if (!usedApproxUsdtCop && Number.isFinite(out.usdtCopBuy)) {
+    sources_detail.usdt_cop = `Binance P2P (${P2P_MARKETS.cop.label})`;
+  }
+  if (!usedApproxUsdtVes && Number.isFinite(out.usdtVesSell)) {
+    sources_detail.usdt_ves = `Binance P2P (${P2P_MARKETS.ves.label})`;
+  }
+
   // status legacy
   out.status = quality === "primary" && out.warnings.length === 0 ? "ok" : "fallback";
   out.missing = missing;
   out.quality = quality;
   out.fallback_rates = fallback_rates;
   out.sources_detail = sources_detail;
+  out.market = {
+    cop_payment: P2P_MARKETS.cop.label,
+    ves_payment: P2P_MARKETS.ves.label,
+    cop_range: {
+      min: P2P_MARKETS.cop.minCop,
+      max: P2P_MARKETS.cop.maxCop,
+    },
+  };
 
   return json(out);
 }
