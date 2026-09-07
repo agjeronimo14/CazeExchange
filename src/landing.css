@@ -186,8 +186,9 @@
 .landingPreviewAmounts strong span { color: #8ba2c6; font-size: 12px; letter-spacing: 0; }
 .landingPreviewArrow { align-self: center; color: #71d8bd; font-size: 23px; }
 
-.landingPreviewRate { margin: 27px 0 16px; padding: 15px; border-radius: 13px; background: rgba(255, 255, 255, 0.045); color: #9eadc3; font-size: 12px; }
-.landingPreviewRate b { color: white; font-size: 12px; }
+.landingPreviewRate { margin: 27px 0 7px; padding: 15px; border-radius: 13px; background: rgba(255, 255, 255, 0.045); color: #9eadc3; font-size: 12px; }
+.landingPreviewRate b { max-width: 67%; color: white; font-size: 12px; line-height: 1.4; text-align: right; }
+.landingPreviewNote { margin: 0 0 16px; color: #7e91b0; font-size: 10px; line-height: 1.45; }
 .landingWhatsAppPreview { width: 100%; min-height: 46px; border: 0; border-radius: 12px; color: #d7fff0; background: rgba(61, 199, 132, 0.16); font: inherit; font-size: 13px; font-weight: 800; }
 .landingWhatsAppPreview span { margin-right: 5px; color: #6de2b0; }
 

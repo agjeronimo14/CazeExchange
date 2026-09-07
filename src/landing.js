@@ -8,6 +8,69 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => 
   "'": "&#39;",
 }[char]));
 
+const LANDING_COP_EXAMPLE = 1_000_000;
+const LANDING_EXAMPLE_MARGIN = 0.1;
+// Coinciden con los ajustes iniciales que usa el cotizador interno.
+const LANDING_RATE_ADJUSTMENTS = Object.freeze({
+  usdtCop: 1.0,
+  usdtVes: -2.5,
+});
+
+function formatNumber(value, maximumFractionDigits = 0) {
+  return new Intl.NumberFormat("es-CO", {
+    maximumFractionDigits,
+    minimumFractionDigits: 0,
+  }).format(value);
+}
+
+function setLandingPreviewMessage(mount, message) {
+  const status = mount.querySelector("#landingPreviewStatus");
+  if (status) status.textContent = message;
+}
+
+async function refreshLandingPreview(mount) {
+  const vesValue = mount.querySelector("#landingPreviewVes");
+  const ratesValue = mount.querySelector("#landingPreviewRate");
+  const note = mount.querySelector("#landingPreviewNote");
+  if (!vesValue || !ratesValue) return;
+
+  try {
+    const response = await fetch(`/api/rates?cop=${LANDING_COP_EXAMPLE}`, {
+      headers: { Accept: "application/json" },
+    });
+    const rates = await response.json();
+    if (!response.ok || !rates?.ok) throw new Error("Rates unavailable");
+
+    const usdtCop = Number(rates.usdtCopBuy);
+    const eurVes = Number(rates.eurVesBcv);
+    const eurUsd = Number(rates.eurUsd);
+    const vesPerUsdt = Number.isFinite(eurVes) && eurVes > 0 && Number.isFinite(eurUsd) && eurUsd > 0
+      ? eurVes / eurUsd
+      : Number(rates.usdtVesSell);
+
+    if (!Number.isFinite(usdtCop) || usdtCop <= 0 || !Number.isFinite(vesPerUsdt) || vesPerUsdt <= 0) {
+      throw new Error("Incomplete rates");
+    }
+
+    // Replica el flujo por defecto del cotizador: ajustes de tasa, COP -> USDT,
+    // menos 10 % de margen, -> VES.
+    const adjustedUsdtCop = usdtCop * (1 + LANDING_RATE_ADJUSTMENTS.usdtCop / 100);
+    const adjustedVesPerUsdt = vesPerUsdt * (1 + LANDING_RATE_ADJUSTMENTS.usdtVes / 100);
+    const netUsdt = (LANDING_COP_EXAMPLE / adjustedUsdtCop) * (1 - LANDING_EXAMPLE_MARGIN);
+    const ves = netUsdt * adjustedVesPerUsdt;
+
+    vesValue.textContent = formatNumber(ves);
+    ratesValue.textContent = `COP ${formatNumber(adjustedUsdtCop, 2)} / USDT · VES ${formatNumber(adjustedVesPerUsdt, 2)} / USDT`;
+    setLandingPreviewMessage(mount, rates.quality === "primary" ? "Tasa actualizada" : "Tasa de referencia");
+    if (note) note.textContent = "Ejemplo con margen de 10 %. La tasa final se confirma en el cotizador.";
+  } catch {
+    vesValue.textContent = "—";
+    ratesValue.textContent = "Las tasas se consultan dentro del cotizador";
+    setLandingPreviewMessage(mount, "Consulta disponible al ingresar");
+    if (note) note.textContent = "La cotización final usa las tasas y ajustes de tu cuenta.";
+  }
+}
+
 function openApp({ login = false } = {}) {
   window.location.hash = "app";
   window.dispatchEvent(new CustomEvent("caze:open-app", { detail: { login } }));
@@ -44,15 +107,16 @@ export function mountLanding(mount) {
         <div class="landingPreview" aria-label="Vista previa de una cotización">
           <div class="landingPreviewTop">
             <span class="landingPreviewBrand">CAZEEXCHANGE</span>
-            <span class="landingLive"><i></i> Actualizado ahora</span>
+            <span class="landingLive"><i></i> <span id="landingPreviewStatus">Actualizando tasa</span></span>
           </div>
           <div class="landingPreviewDirection">COP <span>→</span> VES</div>
           <div class="landingPreviewAmounts">
             <div><small>El cliente entrega</small><strong>1.000.000 <span>COP</span></strong></div>
             <div class="landingPreviewArrow">→</div>
-            <div><small>El beneficiario recibe</small><strong>281.55 <span>VES</span></strong></div>
+            <div><small>El beneficiario recibe</small><strong><span id="landingPreviewVes">—</span> <span>VES</span></strong></div>
           </div>
-          <div class="landingPreviewRate"><span>Tasa aplicada</span><b>COP 3.552 / USDT</b></div>
+          <div class="landingPreviewRate"><span>Tasas de referencia</span><b id="landingPreviewRate">Consultando tasas…</b></div>
+          <p class="landingPreviewNote" id="landingPreviewNote">Ejemplo con margen de 10 %.</p>
           <button type="button" class="landingWhatsAppPreview"><span aria-hidden="true">⌁</span> Enviar cotización por WhatsApp</button>
         </div>
       </section>
@@ -178,4 +242,6 @@ export function mountLanding(mount) {
       if (message) message.textContent = `Error: ${escapeHtml(error?.message || "Intenta nuevamente")}`;
     }
   });
+
+  refreshLandingPreview(mount);
 }
